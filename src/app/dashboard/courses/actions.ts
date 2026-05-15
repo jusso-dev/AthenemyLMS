@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   courseSchema,
+  lessonContentSchema,
   lessonSchema,
   profileSchema,
   sectionSchema,
@@ -145,6 +146,43 @@ export async function createLessonAction(sectionId: string, formData: FormData) 
   });
 
   revalidatePath(`/dashboard/courses/${section.courseId}/curriculum`);
+}
+
+export async function updateLessonContentAction(
+  courseId: string,
+  lessonId: string,
+  formData: FormData,
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    include: { section: { include: { course: true } } },
+  });
+  if (!lesson || lesson.section.courseId !== courseId) {
+    throw new Error("Lesson not found.");
+  }
+  if (!canManageCourse(user, lesson.section.course)) {
+    throw new Error("You do not have permission to edit this lesson.");
+  }
+
+  const parsed = lessonContentSchema.parse({
+    title: formData.get("title"),
+    slug: formData.get("slug"),
+    content: formData.get("content") ?? "",
+    videoUrl: formData.get("videoUrl") ?? "",
+    durationMinutes: formData.get("durationMinutes") ?? 0,
+    preview: formData.get("preview") === "on",
+  });
+
+  await prisma.lesson.update({
+    where: { id: lessonId },
+    data: parsed,
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}/edit`);
+  revalidatePath(`/dashboard/learn/${courseId}/lessons/${lessonId}`);
 }
 
 export async function updateProfileAction(formData: FormData) {

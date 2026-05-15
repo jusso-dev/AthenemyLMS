@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GripVertical, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,8 +84,10 @@ export default async function CurriculumPage({
                       {lessonIndex + 1}. {lesson.title}
                     </span>
                   </div>
-                  <Button size="sm" variant="outline">
-                    Edit lesson
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/edit`}>
+                      Edit lesson
+                    </Link>
                   </Button>
                 </div>
               ))}

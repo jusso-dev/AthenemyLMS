@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { CheckCircle2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { markLessonCompleteAction } from "@/app/dashboard/courses/actions";
 import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getLearnCourse } from "@/lib/dashboard-data";
+import { LessonMarkdown } from "@/lib/lesson-markdown";
 import { SetupMessage } from "@/lib/setup-message";
 
 type ResourceLink = {
@@ -21,13 +23,15 @@ export default async function LessonPlayerPage({
   const { courseId, lessonId } = await params;
   const user = await getCurrentAppUser();
   const { mode, course, completedLessonIds } = await getLearnCourse(user, courseId);
+  if (!course && mode !== "permission") notFound();
+
   const completedIds: string[] = completedLessonIds;
   const lessons = course?.sections.flatMap((section) => section.lessons) ?? [];
   const lesson = lessons.find((item) => item.id === lessonId) ?? lessons[0];
   const lessonContent =
     lesson && "content" in lesson && typeof lesson.content === "string"
       ? lesson.content
-      : null;
+      : "";
   const resources: ResourceLink[] =
     lesson && "resources" in lesson && Array.isArray(lesson.resources)
       ? (lesson.resources as ResourceLink[])
@@ -49,15 +53,12 @@ export default async function LessonPlayerPage({
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
             {mode === "permission" ? (
-              <p className="rounded-md border p-4">Enroll in this course to access lessons.</p>
-            ) : null}
-            {lessonContent ? <p>{lessonContent}</p> : null}
-            {!lessonContent && mode !== "permission" ? (
-              <p>
-                Lesson notes will appear here after an instructor adds persisted
-                content.
+              <p className="rounded-md border p-4">
+                Enroll in this course to access lessons.
               </p>
-            ) : null}
+            ) : (
+              <LessonMarkdown content={lessonContent} />
+            )}
             {mode === "database" && lesson ? (
               <form action={markLessonCompleteAction.bind(null, lesson.id)}>
                 <Button>
@@ -97,7 +98,12 @@ export default async function LessonPlayerPage({
               </p>
             ) : null}
             {resources.map((resource) => (
-              <Button key={resource.id} asChild variant="outline" className="w-full justify-start">
+              <Button
+                key={resource.id}
+                asChild
+                variant="outline"
+                className="w-full justify-start"
+              >
                 <Link href={resource.fileUrl}>
                   <Download className="h-4 w-4" />
                   {resource.title}
