@@ -11,6 +11,8 @@ export type AppUser = {
   imageUrl: string | null;
   stripeCustomerId?: string | null;
   role: Role;
+  bio?: string | null;
+  websiteUrl?: string | null;
 };
 
 export function isClerkConfigured() {
