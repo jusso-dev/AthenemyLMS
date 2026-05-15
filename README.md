@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Athenemy
 
-## Getting Started
+Wisdom, structured into courses.
 
-First, run the development server:
+Athenemy is a modern self-hostable LMS for creators, teams, and small organisations. It provides a production-oriented MVP for selling, delivering, and tracking online courses with a clean Next.js app, role-aware dashboards, Supabase Postgres persistence, Clerk authentication, Cloudflare R2 uploads, and Stripe payments.
+
+## Tech Stack
+
+- Next.js 16 App Router, React 19, TypeScript
+- Tailwind CSS 4 and shadcn/ui-style primitives
+- Prisma and Supabase Postgres
+- Clerk authentication
+- Stripe Checkout and webhooks
+- Cloudflare R2 via S3-compatible signed uploads
+- Zod, React Hook Form
+- Vitest and Playwright
+- ESLint, Prettier, GitHub issue and PR templates
+
+## Local Setup
 
 ```bash
+npm install
+cp .env.example .env.local
+npm run db:generate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app runs in local setup mode until real env values are added. Public pages and dashboard previews use mock course data. Protected production paths do not fake authentication.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Create a Supabase project.
+2. Add the pooled connection string to `DATABASE_URL`.
+3. Add the direct connection string to `DIRECT_URL`.
+4. Run:
 
-## Learn More
+```bash
+npm run db:generate
+npm run db:migrate
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Required Env Vars
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Use `.env.example` as the source of truth. The main required groups are:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- App URL: `NEXT_PUBLIC_APP_URL`
+- Supabase: `DATABASE_URL`, `DIRECT_URL`
+- Clerk: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`
+- Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- Cloudflare R2: account, access key, secret, bucket, public base URL
 
-## Deploy on Vercel
+See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tests
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run test:e2e
+```
+
+Playwright starts the local dev server automatically.
+
+## Deployment Notes
+
+Deploy to a Node-compatible Next.js host. Configure all production env vars in the hosting dashboard, run Prisma migrations against Supabase, configure Clerk URLs, forward Stripe webhooks to `/api/stripe/webhook`, and configure R2 CORS for browser uploads.
+
+## Screenshots
+
+Add screenshots after first deployment:
+
+- Landing page
+- Course catalogue
+- Dashboard overview
+- Course player
+- Admin dashboard
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Development](docs/DEVELOPMENT.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Environment](docs/ENVIRONMENT.md)
+- [Clerk Setup](docs/CLERK_SETUP.md)
+- [Supabase Setup](docs/SUPABASE_SETUP.md)
+- [Stripe Setup](docs/STRIPE_SETUP.md)
+- [R2 Setup](docs/R2_SETUP.md)
