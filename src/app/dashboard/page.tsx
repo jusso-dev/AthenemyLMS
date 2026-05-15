@@ -5,16 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentAppUser, isClerkConfigured } from "@/lib/auth";
 import { SetupMessage } from "@/lib/setup-message";
-import { fallbackNotice, getDashboardOverview } from "@/lib/dashboard-data";
+import {
+  analyticsFallbackNotice,
+  getInstructorAnalytics,
+} from "@/lib/analytics";
 
 export default async function DashboardPage() {
   const user = await getCurrentAppUser();
-  const overview = await getDashboardOverview(user);
+  const analytics = await getInstructorAnalytics(user);
 
   return (
     <div className="space-y-8">
-      {!isClerkConfigured() || overview.mode === "fallback" ? (
-        <SetupMessage {...fallbackNotice()} />
+      {!isClerkConfigured() || analytics.mode === "fallback" ? (
+        <SetupMessage {...analyticsFallbackNotice()} />
       ) : null}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -35,7 +38,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {overview.stats.map((stat) => (
+        {analytics.stats.map((stat) => (
           <Card key={stat.label}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -55,18 +58,26 @@ export default async function DashboardPage() {
             <CardTitle>Course performance</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {overview.courses.length === 0 ? (
+            {analytics.mode === "permission" ? (
               <p className="rounded-md border p-4 text-sm text-muted-foreground">
-                No persisted course activity yet.
+                Instructor or admin access is required to view course analytics.
               </p>
             ) : null}
-            {overview.courses.map((course) => (
+            {analytics.mode !== "permission" && analytics.courses.length === 0 ? (
+              <p className="rounded-md border p-4 text-sm text-muted-foreground">
+                No analytics have been recorded yet.
+              </p>
+            ) : null}
+            {analytics.courses.map((course) => (
               <div key={course.id} className="rounded-md border p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium">{course.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {course.instructor.name ?? "Athenemy faculty"} · {course.level}
+                      {course.instructor?.name ?? "Athenemy faculty"} · {course.level}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {course.activeEnrollments} active · {course.completionRate}% completion · {course.lessonCompletions} lesson completions
                     </p>
                   </div>
                   <Badge variant={course.status === "PUBLISHED" ? "success" : "outline"}>
@@ -76,7 +87,7 @@ export default async function DashboardPage() {
                 <div className="mt-4 h-2 rounded-full bg-muted">
                   <div
                     className="h-2 rounded-full bg-secondary"
-                    style={{ width: `${course.progress}%` }}
+                    style={{ width: `${course.progressScore}%` }}
                   />
                 </div>
               </div>

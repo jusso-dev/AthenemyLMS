@@ -2,7 +2,7 @@ import { Users, BookOpen, ReceiptText, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentAppUser } from "@/lib/auth";
-import { fallbackNotice, getAdminOverview } from "@/lib/dashboard-data";
+import { analyticsFallbackNotice, getAdminAnalytics } from "@/lib/analytics";
 import { SetupMessage } from "@/lib/setup-message";
 
 const statIcons = {
@@ -14,11 +14,13 @@ const statIcons = {
 
 export default async function AdminPage() {
   const user = await getCurrentAppUser();
-  const { mode, stats, users } = await getAdminOverview(user);
+  const analytics = await getAdminAnalytics(user);
 
   return (
     <div className="space-y-8">
-      {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
+      {analytics.mode === "fallback" ? (
+        <SetupMessage {...analyticsFallbackNotice()} />
+      ) : null}
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Admin</h1>
         <p className="mt-2 text-muted-foreground">
@@ -27,7 +29,7 @@ export default async function AdminPage() {
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
+        {analytics.stats.map((stat) => {
           const Icon =
             statIcons[stat.label as keyof typeof statIcons] ?? ShieldCheck;
           return (
@@ -48,17 +50,17 @@ export default async function AdminPage() {
           <CardTitle>Recent users</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {mode === "permission" ? (
+          {analytics.mode === "permission" ? (
             <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              Admin access is required to review platform data.
+              Admin access is required to view platform analytics.
             </p>
           ) : null}
-          {mode !== "permission" && users.length === 0 ? (
+          {analytics.mode !== "permission" && analytics.users.length === 0 ? (
             <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              No users have been created yet.
+              No users have been recorded yet.
             </p>
           ) : null}
-          {users.map((user) => (
+          {analytics.users.map((user) => (
             <div key={user.email} className="flex items-center justify-between rounded-md border p-3">
               <div>
                 <p className="font-medium">{user.name ?? "Unnamed user"}</p>
