@@ -17,9 +17,9 @@ export default function SettingsPage() {
           <CardTitle>Profile</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Input placeholder="Display name" />
-          <Input placeholder="Website URL" />
-          <Textarea placeholder="Instructor bio" />
+          <Input aria-label="Display name" placeholder="Display name" />
+          <Input aria-label="Website URL" placeholder="Website URL" />
+          <Textarea aria-label="Instructor bio" placeholder="Instructor bio" />
           <Button className="w-fit">Save settings</Button>
         </CardContent>
       </Card>
@@ -28,8 +28,8 @@ export default function SettingsPage() {
           <CardTitle>Organisation</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Input placeholder="Organisation name" />
-          <Input placeholder="Support email" />
+          <Input aria-label="Organisation name" placeholder="Organisation name" />
+          <Input aria-label="Support email" placeholder="Support email" />
           <Button variant="outline" className="w-fit">
             Save organisation
           </Button>

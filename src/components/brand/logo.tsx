@@ -33,6 +33,7 @@ export function Logo({
   return (
     <Link
       href="/"
+      aria-label="Athenemy home"
       className={cn("inline-flex items-center gap-3 font-semibold", className)}
     >
       <LogoMark />
