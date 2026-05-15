@@ -4,6 +4,8 @@ import { env, IntegrationSetupError, missingEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth";
 import { mockCourses } from "@/lib/mock-data";
+import { sendEnrollmentEmail } from "@/lib/email";
+import { getOrCreateStripeCustomer } from "@/lib/stripe-customers";
 
 export async function POST(request: Request) {
   try {
@@ -34,15 +36,25 @@ export async function POST(request: Request) {
           create: { userId: user.id, courseId, status: "ACTIVE" },
         });
       }
+      await sendEnrollmentEmail({
+        to: user.email,
+        name: user.name ?? undefined,
+        courseTitle: course.title,
+      });
       return NextResponse.json({ url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/learn/${courseId}` });
     }
 
     const stripe = getStripe();
+    const hasDatabase = missingEnv(["DATABASE_URL"]).length === 0;
+    const customer = hasDatabase
+      ? await getOrCreateStripeCustomer(stripe, user)
+      : undefined;
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       success_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/learn/${courseId}?checkout=success`,
       cancel_url: `${env.NEXT_PUBLIC_APP_URL}/courses/${course.slug}`,
-      customer_email: user.email,
+      customer,
+      customer_email: customer ? undefined : user.email,
       metadata: { courseId, userId: user.id },
       line_items: [
         {
@@ -59,7 +71,7 @@ export async function POST(request: Request) {
       ],
     });
 
-    if (missingEnv(["DATABASE_URL"]).length === 0) {
+    if (hasDatabase) {
       await prisma.payment.create({
         data: {
           userId: user.id,
