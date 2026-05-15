@@ -9,6 +9,10 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 - `src/lib`: env validation, auth helpers, permissions, service clients, schemas, mock data, and utilities.
 - `prisma/schema.prisma`: LMS domain model for users, courses, lessons, resources, enrollments, progress, and payments.
 
+## Lesson Authoring
+
+Lesson bodies are authored as Markdown through `src/components/forms/rich-lesson-editor.tsx` and persisted to `Lesson.content`. The renderer in `src/lib/lesson-markdown.tsx` maps supported Markdown blocks to React elements instead of injecting raw HTML, keeping previews and the lesson player safe by default.
+
 ## Integrations
 
 - Clerk owns identity. `User.clerkId` links Clerk users to local Postgres profiles.

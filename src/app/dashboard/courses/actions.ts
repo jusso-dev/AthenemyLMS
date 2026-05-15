@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { courseSchema } from "@/lib/course-schemas";
+import { courseSchema, lessonContentSchema } from "@/lib/course-schemas";
 import { missingEnv } from "@/lib/env";
-import { hasRole } from "@/lib/permissions";
+import { canManageCourse, hasRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { requireAppUser } from "@/lib/auth";
 
@@ -38,4 +38,43 @@ export async function createCourseAction(formData: FormData) {
 
   revalidatePath("/dashboard/courses");
   redirect(`/dashboard/courses/${course.id}/edit`);
+}
+
+export async function updateLessonContentAction(
+  courseId: string,
+  lessonId: string,
+  formData: FormData,
+) {
+  if (missingEnv(["DATABASE_URL"]).length > 0) {
+    throw new Error("Supabase is not configured. Add DATABASE_URL to .env.local.");
+  }
+
+  const user = await requireAppUser();
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    include: { section: { include: { course: true } } },
+  });
+  if (!lesson || lesson.section.courseId !== courseId) {
+    throw new Error("Lesson not found.");
+  }
+  if (!canManageCourse(user, lesson.section.course)) {
+    throw new Error("You do not have permission to edit this lesson.");
+  }
+
+  const parsed = lessonContentSchema.parse({
+    title: formData.get("title"),
+    slug: formData.get("slug"),
+    content: formData.get("content") ?? "",
+    videoUrl: formData.get("videoUrl") ?? "",
+    durationMinutes: formData.get("durationMinutes") ?? 0,
+    preview: formData.get("preview") === "on",
+  });
+
+  await prisma.lesson.update({
+    where: { id: lessonId },
+    data: parsed,
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}/edit`);
+  revalidatePath(`/dashboard/learn/${courseId}/lessons/${lessonId}`);
 }

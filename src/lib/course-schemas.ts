@@ -28,6 +28,10 @@ export const lessonSchema = z.object({
   preview: z.coerce.boolean().default(false),
 });
 
+export const lessonContentSchema = lessonSchema.extend({
+  content: z.string().max(20000, "Lesson content must stay under 20,000 characters").optional().or(z.literal("")),
+});
+
 export function courseDefaults(title = "") {
   return {
     title,

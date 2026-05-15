@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { CheckCircle2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { mockCourses } from "@/lib/mock-data";
+import { missingEnv } from "@/lib/env";
+import { prisma } from "@/lib/prisma";
+import { LessonMarkdown } from "@/lib/lesson-markdown";
 
 export default async function LessonPlayerPage({
   params,
@@ -10,9 +14,25 @@ export default async function LessonPlayerPage({
   params: Promise<{ courseId: string; lessonId: string }>;
 }) {
   const { courseId, lessonId } = await params;
-  const course = mockCourses.find((item) => item.id === courseId) ?? mockCourses[0];
+  const hasDatabase = missingEnv(["DATABASE_URL"]).length === 0;
+  const course = hasDatabase
+    ? await prisma.course.findUnique({
+          where: { id: courseId },
+          include: {
+            sections: {
+              orderBy: { position: "asc" },
+              include: { lessons: { orderBy: { position: "asc" } } },
+            },
+          },
+        })
+    : (mockCourses.find((item) => item.id === courseId) ?? mockCourses[0]);
+  if (!course) notFound();
   const lessons = course.sections.flatMap((section) => section.lessons);
   const lesson = lessons.find((item) => item.id === lessonId) ?? lessons[0];
+  const content =
+    lesson && "content" in lesson && typeof lesson.content === "string"
+      ? lesson.content
+      : "";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -26,11 +46,7 @@ export default async function LessonPlayerPage({
             <CardTitle>Lesson notes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
-            <p>
-              This lesson content area supports rich text, embedded video URLs,
-              uploaded resources, and progress events. The MVP page is ready for
-              persisted lesson content once Supabase is configured.
-            </p>
+            <LessonMarkdown content={content} />
             <Button>
               <CheckCircle2 className="h-4 w-4" />
               Mark complete
