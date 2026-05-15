@@ -50,18 +50,21 @@ export default async function SettingsPage() {
           ) : null}
           <form action={updateProfileAction} className="grid gap-4">
             <Input
+              aria-label="Display name"
               name="name"
               placeholder="Display name"
               defaultValue={user?.name ?? ""}
               disabled={!hasDatabase || !user}
             />
             <Input
+              aria-label="Website URL"
               name="websiteUrl"
               placeholder="Website URL"
               defaultValue={user?.websiteUrl ?? ""}
               disabled={!hasDatabase || !user}
             />
             <Textarea
+              aria-label="Instructor bio"
               name="bio"
               placeholder="Instructor bio"
               defaultValue={user?.bio ?? ""}
@@ -79,8 +82,14 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-6">
           <form action={createOrganizationAction} className="grid gap-4 rounded-md border p-4">
-            <Input name="name" placeholder="Organisation name" disabled={!hasDatabase || !user} />
             <Input
+              aria-label="Organisation name"
+              name="name"
+              placeholder="Organisation name"
+              disabled={!hasDatabase || !user}
+            />
+            <Input
+              aria-label="Support email"
               name="supportEmail"
               type="email"
               placeholder="Support email"
@@ -98,8 +107,14 @@ export default async function SettingsPage() {
               </div>
               <form action={inviteOrganizationMemberAction} className="grid gap-3">
                 <input type="hidden" name="organizationId" value={membership.organizationId} />
-                <Input name="email" type="email" placeholder="teammate@example.com" />
+                <Input
+                  aria-label="Invitee email"
+                  name="email"
+                  type="email"
+                  placeholder="teammate@example.com"
+                />
                 <select
+                  aria-label="Invitation role"
                   name="role"
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                   defaultValue="MEMBER"

@@ -38,7 +38,14 @@ export default async function ManageCoursesPage({
       </div>
       <form className="relative max-w-sm">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input name="q" placeholder="Filter courses" defaultValue={q} className="pl-9" />
+        <Input
+          aria-label="Filter courses"
+          type="search"
+          name="q"
+          placeholder="Filter courses"
+          defaultValue={q}
+          className="pl-9"
+        />
       </form>
       <Card>
         <CardHeader>

@@ -79,6 +79,7 @@ Add screenshots after first deployment:
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Accessibility Audit](docs/ACCESSIBILITY_AUDIT.md)
 - [Course Import and Export](docs/COURSE_IMPORT_EXPORT.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Deployment](docs/DEPLOYMENT.md)

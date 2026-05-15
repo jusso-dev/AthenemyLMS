@@ -29,7 +29,13 @@ export default async function CoursesPage({
           </div>
           <form className="relative w-full md:max-w-sm">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input name="q" placeholder="Search courses" className="pl-9" />
+            <Input
+              aria-label="Search courses"
+              type="search"
+              name="q"
+              placeholder="Search courses"
+              className="pl-9"
+            />
           </form>
         </div>
         <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">

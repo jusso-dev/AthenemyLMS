@@ -34,7 +34,7 @@ export function DashboardShell({
     <div className="min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card px-4 py-5 lg:block">
         <Logo />
-        <nav className="mt-8 space-y-1">
+        <nav aria-label="Dashboard" className="mt-8 space-y-1">
           {nav.map((item) => (
             <Link
               key={item.href}
