@@ -44,22 +44,28 @@ enum VideoProvider {
   R2
 }
 
+enum AssessmentType {
+  QUIZ
+  ASSIGNMENT
+}
+
 model User {
-  id               String           @id @default(cuid())
-  clerkId          String           @unique
-  email            String           @unique
-  name             String?
-  imageUrl         String?
-  stripeCustomerId String?          @unique
-  role             Role             @default(STUDENT)
-  bio              String?
-  websiteUrl       String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  courses          Course[]         @relation("CourseInstructor")
-  enrollments      Enrollment[]
-  lessonProgress   LessonProgress[]
-  payments         Payment[]
+  id                    String                 @id @default(cuid())
+  clerkId               String                 @unique
+  email                 String                 @unique
+  name                  String?
+  imageUrl              String?
+  stripeCustomerId      String?                @unique
+  role                  Role                   @default(STUDENT)
+  bio                   String?
+  websiteUrl            String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  courses               Course[]               @relation("CourseInstructor")
+  enrollments           Enrollment[]
+  lessonProgress        LessonProgress[]
+  payments              Payment[]
+  assessmentSubmissions AssessmentSubmission[]
 
   @@index([role])
 }
@@ -85,6 +91,7 @@ model Course {
   enrollments      Enrollment[]
   payments         Payment[]
   analyticsRollups AnalyticsRollup[]
+  assessments      Assessment[]
 
   @@index([instructorId, status])
 }
@@ -197,4 +204,46 @@ model AnalyticsRollup {
   @@unique([scope, courseId, date])
   @@index([scope, date])
   @@index([courseId, date])
+}
+
+model Assessment {
+  id                    String                 @id @default(cuid())
+  courseId              String
+  title                 String
+  description           String?
+  type                  AssessmentType         @default(QUIZ)
+  passingScore          Int                    @default(70)
+  requiredForCompletion Boolean                @default(false)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  course                Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions             AssessmentQuestion[]
+  submissions           AssessmentSubmission[]
+
+  @@index([courseId, requiredForCompletion])
+}
+
+model AssessmentQuestion {
+  id           String     @id @default(cuid())
+  assessmentId String
+  prompt       String
+  options      Json
+  correctIndex Int
+  position     Int        @default(0)
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model AssessmentSubmission {
+  id           String     @id @default(cuid())
+  assessmentId String
+  userId       String
+  answers      Json
+  score        Int
+  passed       Boolean
+  createdAt    DateTime   @default(now())
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, passed])
+  @@index([assessmentId, userId])
 }

@@ -40,6 +40,16 @@ export const lessonVideoSchema = z.object({
   videoBytes: z.coerce.number().int().positive().optional().or(z.literal("")),
 });
 
+export const assessmentSchema = z.object({
+  title: z.string().min(3).max(140),
+  description: z.string().max(1000).optional().or(z.literal("")),
+  prompt: z.string().min(5).max(1000),
+  options: z.string().min(3).max(4000),
+  correctIndex: z.coerce.number().int().min(0).max(9),
+  passingScore: z.coerce.number().int().min(1).max(100).default(70),
+  requiredForCompletion: z.coerce.boolean().default(false),
+});
+
 export const sectionSchema = z.object({
   title: z.string().min(2).max(120),
 });

@@ -24,7 +24,7 @@ export default async function CurriculumPage({
   return (
     <div className="space-y-6">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Curriculum</h1>
           <p className="mt-2 text-muted-foreground">
@@ -32,6 +32,11 @@ export default async function CurriculumPage({
             upload resources.
           </p>
         </div>
+        <Button asChild variant="outline">
+          <Link href={`/dashboard/courses/${courseId}/assessments`}>
+            Assessments
+          </Link>
+        </Button>
       </div>
       {mode === "permission" || !course ? (
         <Card>

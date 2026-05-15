@@ -29,6 +29,10 @@ Instructor and admin dashboards read analytics through `src/lib/analytics.ts`. T
 
 Lesson videos use a hybrid strategy documented in `docs/VIDEO_STRATEGY.md`: external embed URLs for fast setup and R2-hosted MP4/WebM uploads for self-hosted files. The lesson player renders YouTube, Vimeo, and direct video URLs while metadata remains persisted on the `Lesson` record.
 
+## Assessments
+
+Courses can include quiz assessments with persisted questions and submissions. Required assessments act as completion gates through `getCompletionGateStatus`, which checks whether a learner has passed every required assessment before course completion flows mark final completion.
+
 ## Local Fallbacks
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.

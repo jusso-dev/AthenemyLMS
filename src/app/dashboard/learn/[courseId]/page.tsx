@@ -1,9 +1,14 @@
 import Link from "next/link";
-import { PlayCircle } from "lucide-react";
+import { ClipboardCheck, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentAppUser } from "@/lib/auth";
-import { fallbackNotice, getLearnCourse } from "@/lib/dashboard-data";
+import {
+  databaseIsConfigured,
+  fallbackNotice,
+  getLearnCourse,
+} from "@/lib/dashboard-data";
+import { prisma } from "@/lib/prisma";
 import { SetupMessage } from "@/lib/setup-message";
 
 export default async function LearnCoursePage({
@@ -16,6 +21,13 @@ export default async function LearnCoursePage({
   const { mode, course, completedLessonIds } = await getLearnCourse(user, courseId);
   const completedIds: string[] = completedLessonIds;
   const firstLesson = course?.sections[0]?.lessons[0];
+  const assessments =
+    mode !== "permission" && databaseIsConfigured()
+      ? await prisma.assessment.findMany({
+          where: { courseId },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
 
   return (
     <div className="space-y-6">
@@ -81,6 +93,30 @@ export default async function LearnCoursePage({
           ))}
         </CardContent>
       </Card>
+      {assessments.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Assessments</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {assessments.map((assessment) => (
+              <Link
+                key={assessment.id}
+                href={`/dashboard/learn/${courseId}/assessments/${assessment.id}`}
+                className="flex items-center gap-3 rounded-md border p-3 text-sm hover:bg-muted"
+              >
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+                {assessment.title}
+                {assessment.requiredForCompletion ? (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Required
+                  </span>
+                ) : null}
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
