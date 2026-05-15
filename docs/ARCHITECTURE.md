@@ -17,6 +17,10 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 - Cloudflare R2 stores thumbnails, resources, and optional lesson files through signed upload URLs.
 - Email is intentionally stubbed in `src/lib/email/index.ts`.
 
+## Assessments
+
+Courses can include quiz assessments with persisted questions and submissions. Required assessments act as completion gates through `getCompletionGateStatus`, which checks whether a learner has passed every required assessment before course completion flows mark final completion.
+
 ## Local Fallbacks
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GripVertical, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,11 @@ export default async function CurriculumPage({
         <Button>
           <Plus className="h-4 w-4" />
           Add section
+        </Button>
+        <Button asChild variant="outline">
+          <Link href={`/dashboard/courses/${courseId}/assessments`}>
+            Assessments
+          </Link>
         </Button>
       </div>
       <div className="space-y-4">

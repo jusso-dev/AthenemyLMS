@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { PlayCircle } from "lucide-react";
+import { ClipboardCheck, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { mockCourses } from "@/lib/mock-data";
+import { missingEnv } from "@/lib/env";
+import { prisma } from "@/lib/prisma";
 
 export default async function LearnCoursePage({
   params,
@@ -12,6 +14,13 @@ export default async function LearnCoursePage({
   const { courseId } = await params;
   const course = mockCourses.find((item) => item.id === courseId) ?? mockCourses[0];
   const firstLesson = course.sections[0]?.lessons[0];
+  const assessments =
+    missingEnv(["DATABASE_URL"]).length === 0
+      ? await prisma.assessment.findMany({
+          where: { courseId },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
 
   return (
     <div className="space-y-6">
@@ -54,6 +63,30 @@ export default async function LearnCoursePage({
           ))}
         </CardContent>
       </Card>
+      {assessments.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Assessments</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {assessments.map((assessment) => (
+              <Link
+                key={assessment.id}
+                href={`/dashboard/learn/${courseId}/assessments/${assessment.id}`}
+                className="flex items-center gap-3 rounded-md border p-3 text-sm hover:bg-muted"
+              >
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+                {assessment.title}
+                {assessment.requiredForCompletion ? (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Required
+                  </span>
+                ) : null}
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
