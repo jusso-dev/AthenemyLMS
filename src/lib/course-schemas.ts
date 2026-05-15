@@ -28,6 +28,17 @@ export const lessonSchema = z.object({
   preview: z.coerce.boolean().default(false),
 });
 
+export const organizationSchema = z.object({
+  name: z.string().min(2).max(120),
+  supportEmail: z.string().email().optional().or(z.literal("")),
+});
+
+export const invitationSchema = z.object({
+  organizationId: z.string().min(1),
+  email: z.string().email(),
+  role: z.enum(["ADMIN", "INSTRUCTOR", "MEMBER"]).default("MEMBER"),
+});
+
 export function courseDefaults(title = "") {
   return {
     title,

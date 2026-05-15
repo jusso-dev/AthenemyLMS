@@ -34,21 +34,37 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  INSTRUCTOR
+  MEMBER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 model User {
-  id                 String           @id @default(cuid())
-  clerkId            String           @unique
-  email              String           @unique
-  name               String?
-  imageUrl           String?
-  role               Role             @default(STUDENT)
-  bio                String?
-  websiteUrl         String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  courses            Course[]         @relation("CourseInstructor")
-  enrollments        Enrollment[]
-  lessonProgress     LessonProgress[]
-  payments           Payment[]
+  id                      String                   @id @default(cuid())
+  clerkId                 String                   @unique
+  email                   String                   @unique
+  name                    String?
+  imageUrl                String?
+  role                    Role                     @default(STUDENT)
+  bio                     String?
+  websiteUrl              String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  courses                 Course[]                 @relation("CourseInstructor")
+  enrollments             Enrollment[]
+  lessonProgress          LessonProgress[]
+  payments                Payment[]
+  organizationMemberships OrganizationMembership[]
+  sentInvitations         OrganizationInvitation[] @relation("InvitationInviter")
 }
 
 model Course {
@@ -68,9 +84,57 @@ model Course {
   updatedAt       DateTime        @updatedAt
   publishedAt     DateTime?
   instructor      User            @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
+  organizationId  String?
+  organization    Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   sections        CourseSection[]
   enrollments     Enrollment[]
   payments        Payment[]
+
+  @@index([organizationId, status])
+}
+
+model Organization {
+  id           String                   @id @default(cuid())
+  clerkOrgId   String?                  @unique
+  name         String
+  slug         String                   @unique
+  supportEmail String?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  memberships  OrganizationMembership[]
+  invitations  OrganizationInvitation[]
+  courses      Course[]
+}
+
+model OrganizationMembership {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(MEMBER)
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, role])
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrganizationRole @default(MEMBER)
+  token          String           @unique
+  status         InvitationStatus @default(PENDING)
+  invitedById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User             @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([email, status])
 }
 
 model CourseSection {
@@ -141,17 +205,17 @@ model LessonProgress {
 }
 
 model Payment {
-  id                String        @id @default(cuid())
-  userId            String
-  courseId          String
-  stripeSessionId   String?       @unique
-  stripePaymentId   String?
-  amountCents       Int
-  currency          String        @default("usd")
-  status            PaymentStatus @default(PENDING)
-  rawEvent          Json?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course            Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id              String        @id @default(cuid())
+  userId          String
+  courseId        String
+  stripeSessionId String?       @unique
+  stripePaymentId String?
+  amountCents     Int
+  currency        String        @default("usd")
+  status          PaymentStatus @default(PENDING)
+  rawEvent        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }

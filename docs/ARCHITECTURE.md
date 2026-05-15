@@ -20,3 +20,7 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 ## Local Fallbacks
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.
+
+## Organisations
+
+Tenant data is stored in Prisma using organisations, memberships, and invitations with optional `clerkOrgId` linkage. Courses can belong to an organisation while existing single-owner courses keep `organizationId` null, preserving current creator workflows. Clerk organisation UI can be added later without changing the local tenant isolation model.
