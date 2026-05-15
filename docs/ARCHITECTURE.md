@@ -20,3 +20,5 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 ## Local Fallbacks
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.
+
+Dashboard management pages read through `src/lib/dashboard-data.ts`. That layer uses Prisma when `DATABASE_URL` is configured and falls back to explicit mock data only for local setup or database connection failure states. Mutating dashboard operations live in `src/app/dashboard/courses/actions.ts`; they require a signed-in Clerk-backed user, validate form payloads with Zod, and check instructor/admin ownership before writing to Prisma.

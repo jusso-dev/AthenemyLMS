@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { courseSchema } from "@/lib/course-schemas";
+import { courseSchema, profileSchema, sectionSchema } from "@/lib/course-schemas";
 
 describe("courseSchema", () => {
   it("accepts a valid course draft", () => {
@@ -25,5 +25,16 @@ describe("courseSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("validates curriculum and profile mutation payloads", () => {
+    expect(sectionSchema.safeParse({ title: "Foundations" }).success).toBe(true);
+    expect(
+      profileSchema.safeParse({
+        name: "Mara Ellis",
+        websiteUrl: "https://example.com",
+        bio: "Course designer",
+      }).success,
+    ).toBe(true);
   });
 });
