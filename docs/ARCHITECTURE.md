@@ -37,4 +37,8 @@ Courses can include quiz assessments with persisted questions and submissions. R
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.
 
+## Certificates
+
+Completed enrollments can issue one certificate per learner/course when `Course.certificatesEnabled` is true. Public certificate verification uses the certificate number and exposes only course, issuer, and issue date metadata, not private learner profile data.
+
 Dashboard management pages read through `src/lib/dashboard-data.ts`. That layer uses Prisma when `DATABASE_URL` is configured and falls back to explicit mock data only for local setup or database connection failure states. Mutating dashboard operations live in `src/app/dashboard/courses/actions.ts`; they require a signed-in Clerk-backed user, validate form payloads with Zod, and check instructor/admin ownership before writing to Prisma.

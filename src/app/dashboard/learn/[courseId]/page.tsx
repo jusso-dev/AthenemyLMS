@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardCheck, PlayCircle } from "lucide-react";
+import { Award, ClipboardCheck, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentAppUser } from "@/lib/auth";
@@ -93,6 +93,12 @@ export default async function LearnCoursePage({
           ))}
         </CardContent>
       </Card>
+      <Button asChild variant="outline">
+        <Link href={`/dashboard/learn/${courseId}/certificate`}>
+          <Award className="h-4 w-4" />
+          Course certificate
+        </Link>
+      </Button>
       {assessments.length > 0 ? (
         <Card>
           <CardHeader>

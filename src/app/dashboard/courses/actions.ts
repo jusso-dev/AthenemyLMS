@@ -15,6 +15,7 @@ import { missingEnv } from "@/lib/env";
 import { canManageCourse, hasRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { requireAppUser } from "@/lib/auth";
+import { issueCertificate } from "@/lib/certificates";
 import { sendCoursePublishedEmail } from "@/lib/email";
 import { parseQuizOptions, scoreQuiz } from "@/lib/assessments";
 import { slugify } from "@/lib/utils";
@@ -34,6 +35,7 @@ export async function createCourseAction(formData: FormData) {
     description: formData.get("description"),
     priceCents: formData.get("priceCents"),
     status: formData.get("status"),
+    certificatesEnabled: formData.get("certificatesEnabled") === "on",
     thumbnailUrl: formData.get("thumbnailUrl"),
   });
 
@@ -57,6 +59,14 @@ export async function createCourseAction(formData: FormData) {
   redirect(`/dashboard/courses/${course.id}/edit`);
 }
 
+export async function issueCertificateAction(courseId: string) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const certificate = await issueCertificate(user.id, courseId);
+  redirect(`/certificates/${certificate.certificateNumber}`);
+}
+
 export async function updateCourseAction(courseId: string, formData: FormData) {
   assertDatabaseConfigured();
 
@@ -73,6 +83,7 @@ export async function updateCourseAction(courseId: string, formData: FormData) {
     description: formData.get("description"),
     priceCents: formData.get("priceCents"),
     status: formData.get("status"),
+    certificatesEnabled: formData.get("certificatesEnabled") === "on",
     thumbnailUrl: formData.get("thumbnailUrl"),
   });
 

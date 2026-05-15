@@ -66,32 +66,35 @@ model User {
   lessonProgress        LessonProgress[]
   payments              Payment[]
   assessmentSubmissions AssessmentSubmission[]
+  certificates          Certificate[]
 
   @@index([role])
 }
 
 model Course {
-  id               String            @id @default(cuid())
-  instructorId     String
-  title            String
-  slug             String            @unique
-  subtitle         String?
-  description      String?
-  thumbnailUrl     String?
-  priceCents       Int               @default(0)
-  currency         String            @default("usd")
-  status           CourseStatus      @default(DRAFT)
-  level            String            @default("Beginner")
-  durationMinutes  Int               @default(0)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  publishedAt      DateTime?
-  instructor       User              @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
-  sections         CourseSection[]
-  enrollments      Enrollment[]
-  payments         Payment[]
-  analyticsRollups AnalyticsRollup[]
-  assessments      Assessment[]
+  id                  String            @id @default(cuid())
+  instructorId        String
+  title               String
+  slug                String            @unique
+  subtitle            String?
+  description         String?
+  thumbnailUrl        String?
+  priceCents          Int               @default(0)
+  currency            String            @default("usd")
+  status              CourseStatus      @default(DRAFT)
+  certificatesEnabled Boolean           @default(true)
+  level               String            @default("Beginner")
+  durationMinutes     Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  publishedAt         DateTime?
+  instructor          User              @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
+  sections            CourseSection[]
+  enrollments         Enrollment[]
+  payments            Payment[]
+  analyticsRollups    AnalyticsRollup[]
+  assessments         Assessment[]
+  certificates        Certificate[]
 
   @@index([instructorId, status])
 }
@@ -246,4 +249,17 @@ model AssessmentSubmission {
 
   @@index([userId, passed])
   @@index([assessmentId, userId])
+}
+
+model Certificate {
+  id                String   @id @default(cuid())
+  certificateNumber String   @unique
+  userId            String
+  courseId          String
+  issuedAt          DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course            Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId, issuedAt])
 }
