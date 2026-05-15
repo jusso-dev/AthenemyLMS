@@ -17,6 +17,10 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 - Cloudflare R2 stores thumbnails, resources, and optional lesson files through signed upload URLs.
 - Email is intentionally stubbed in `src/lib/email/index.ts`.
 
+## Video
+
+Lesson videos use a hybrid strategy documented in `docs/VIDEO_STRATEGY.md`: external embed URLs for fast setup and R2-hosted MP4/WebM uploads for self-hosted files. The lesson player renders YouTube, Vimeo, and direct video URLs while metadata remains persisted on the `Lesson` record.
+
 ## Local Fallbacks
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.

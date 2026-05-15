@@ -28,6 +28,14 @@ export const lessonSchema = z.object({
   preview: z.coerce.boolean().default(false),
 });
 
+export const lessonVideoSchema = z.object({
+  videoUrl: z.string().url("Use a valid video URL").optional().or(z.literal("")),
+  videoProvider: z.enum(["EXTERNAL", "R2"]).default("EXTERNAL"),
+  videoAssetKey: z.string().max(500).optional().or(z.literal("")),
+  videoMimeType: z.string().max(120).optional().or(z.literal("")),
+  videoBytes: z.coerce.number().int().positive().optional().or(z.literal("")),
+});
+
 export function courseDefaults(title = "") {
   return {
     title,
