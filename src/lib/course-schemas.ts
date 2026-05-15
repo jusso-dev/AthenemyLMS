@@ -28,6 +28,18 @@ export const lessonSchema = z.object({
   preview: z.coerce.boolean().default(false),
 });
 
+export const lessonContentSchema = lessonSchema.extend({
+  content: z.string().max(20000, "Lesson content must stay under 20,000 characters").optional().or(z.literal("")),
+});
+
+export const lessonVideoSchema = z.object({
+  videoUrl: z.string().url("Use a valid video URL").optional().or(z.literal("")),
+  videoProvider: z.enum(["EXTERNAL", "R2"]).default("EXTERNAL"),
+  videoAssetKey: z.string().max(500).optional().or(z.literal("")),
+  videoMimeType: z.string().max(120).optional().or(z.literal("")),
+  videoBytes: z.coerce.number().int().positive().optional().or(z.literal("")),
+});
+
 export const assessmentSchema = z.object({
   title: z.string().min(3).max(140),
   description: z.string().max(1000).optional().or(z.literal("")),
@@ -36,6 +48,16 @@ export const assessmentSchema = z.object({
   correctIndex: z.coerce.number().int().min(0).max(9),
   passingScore: z.coerce.number().int().min(1).max(100).default(70),
   requiredForCompletion: z.coerce.boolean().default(false),
+});
+
+export const sectionSchema = z.object({
+  title: z.string().min(2).max(120),
+});
+
+export const profileSchema = z.object({
+  name: z.string().max(120).optional().or(z.literal("")),
+  websiteUrl: z.string().url().optional().or(z.literal("")),
+  bio: z.string().max(2000).optional().or(z.literal("")),
 });
 
 export function courseDefaults(title = "") {

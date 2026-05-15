@@ -34,6 +34,16 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum AnalyticsScope {
+  COURSE
+  PLATFORM
+}
+
+enum VideoProvider {
+  EXTERNAL
+  R2
+}
+
 enum AssessmentType {
   QUIZ
   ASSIGNMENT
@@ -45,6 +55,7 @@ model User {
   email                 String                 @unique
   name                  String?
   imageUrl              String?
+  stripeCustomerId      String?                @unique
   role                  Role                   @default(STUDENT)
   bio                   String?
   websiteUrl            String?
@@ -55,29 +66,34 @@ model User {
   lessonProgress        LessonProgress[]
   payments              Payment[]
   assessmentSubmissions AssessmentSubmission[]
+
+  @@index([role])
 }
 
 model Course {
-  id              String          @id @default(cuid())
-  instructorId    String
-  title           String
-  slug            String          @unique
-  subtitle        String?
-  description     String?
-  thumbnailUrl    String?
-  priceCents      Int             @default(0)
-  currency        String          @default("usd")
-  status          CourseStatus    @default(DRAFT)
-  level           String          @default("Beginner")
-  durationMinutes Int             @default(0)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  publishedAt     DateTime?
-  instructor      User            @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
-  sections        CourseSection[]
-  enrollments     Enrollment[]
-  payments        Payment[]
-  assessments     Assessment[]
+  id               String            @id @default(cuid())
+  instructorId     String
+  title            String
+  slug             String            @unique
+  subtitle         String?
+  description      String?
+  thumbnailUrl     String?
+  priceCents       Int               @default(0)
+  currency         String            @default("usd")
+  status           CourseStatus      @default(DRAFT)
+  level            String            @default("Beginner")
+  durationMinutes  Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  publishedAt      DateTime?
+  instructor       User              @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
+  sections         CourseSection[]
+  enrollments      Enrollment[]
+  payments         Payment[]
+  analyticsRollups AnalyticsRollup[]
+  assessments      Assessment[]
+
+  @@index([instructorId, status])
 }
 
 model CourseSection {
@@ -98,6 +114,10 @@ model Lesson {
   slug            String
   content         String?
   videoUrl        String?
+  videoProvider   VideoProvider?
+  videoAssetKey   String?
+  videoMimeType   String?
+  videoBytes      Int?
   durationMinutes Int              @default(0)
   preview         Boolean          @default(false)
   position        Int              @default(0)
@@ -133,6 +153,8 @@ model Enrollment {
   course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+  @@index([courseId, status])
+  @@index([status, createdAt])
 }
 
 model LessonProgress {
@@ -145,6 +167,7 @@ model LessonProgress {
   lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@unique([userId, lessonId])
+  @@index([lessonId, completedAt])
 }
 
 model Payment {
@@ -161,6 +184,26 @@ model Payment {
   updatedAt       DateTime      @updatedAt
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, status, createdAt])
+}
+
+model AnalyticsRollup {
+  id                   String         @id @default(cuid())
+  scope                AnalyticsScope
+  courseId             String?
+  date                 DateTime
+  activeEnrollments    Int            @default(0)
+  completedEnrollments Int            @default(0)
+  lessonCompletions    Int            @default(0)
+  revenueCents         Int            @default(0)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  course               Course?        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([scope, courseId, date])
+  @@index([scope, date])
+  @@index([courseId, date])
 }
 
 model Assessment {
