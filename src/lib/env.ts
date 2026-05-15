@@ -30,11 +30,12 @@ const envSchema = z.object({
   CLOUDFLARE_R2_PUBLIC_BASE_URL: z.string().url().optional(),
   EMAIL_PROVIDER: z.string().default("stub"),
   EMAIL_FROM: z.string().default("Athenemy <hello@example.com>"),
+  RESEND_API_KEY: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
 
-export type IntegrationName = "database" | "clerk" | "stripe" | "r2";
+export type IntegrationName = "database" | "clerk" | "stripe" | "r2" | "email";
 
 export class IntegrationSetupError extends Error {
   constructor(
