@@ -89,6 +89,13 @@ export function CourseForm({
           </select>
         </div>
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          {...form.register("certificatesEnabled")}
+        />
+        Issue certificates for completed learners
+      </label>
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="thumbnailUrl">
           Thumbnail URL

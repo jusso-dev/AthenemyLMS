@@ -12,6 +12,7 @@ export const courseSchema = z.object({
   description: z.string().max(6000).optional().or(z.literal("")),
   priceCents: z.coerce.number().int().min(0).max(200000),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("DRAFT"),
+  certificatesEnabled: z.coerce.boolean().default(true),
   thumbnailUrl: z.string().url().optional().or(z.literal("")),
 });
 
@@ -36,6 +37,7 @@ export function courseDefaults(title = "") {
     description: "",
     priceCents: 0,
     status: "DRAFT" as const,
+    certificatesEnabled: true,
     thumbnailUrl: "",
   };
 }

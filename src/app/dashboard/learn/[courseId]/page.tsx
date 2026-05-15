@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PlayCircle } from "lucide-react";
+import { Award, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { mockCourses } from "@/lib/mock-data";
@@ -54,6 +54,12 @@ export default async function LearnCoursePage({
           ))}
         </CardContent>
       </Card>
+      <Button asChild variant="outline">
+        <Link href={`/dashboard/learn/${courseId}/certificate`}>
+          <Award className="h-4 w-4" />
+          Course certificate
+        </Link>
+      </Button>
     </div>
   );
 }
