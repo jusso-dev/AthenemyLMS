@@ -4,6 +4,7 @@ import { env, IntegrationSetupError, missingEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAppUser } from "@/lib/auth";
 import { mockCourses } from "@/lib/mock-data";
+import { sendEnrollmentEmail } from "@/lib/email";
 import { getOrCreateStripeCustomer } from "@/lib/stripe-customers";
 
 export async function POST(request: Request) {
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
           create: { userId: user.id, courseId, status: "ACTIVE" },
         });
       }
+      await sendEnrollmentEmail({
+        to: user.email,
+        name: user.name ?? undefined,
+        courseTitle: course.title,
+      });
       return NextResponse.json({ url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/learn/${courseId}` });
     }
 

@@ -15,7 +15,7 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 - Supabase Postgres is accessed through Prisma.
 - Stripe Checkout creates paid enrollments after verified webhook events.
 - Cloudflare R2 stores thumbnails, resources, and optional lesson files through signed upload URLs.
-- Email is intentionally stubbed in `src/lib/email/index.ts`.
+- Transactional email is routed through `src/lib/email/index.ts`, using safe stub delivery in local/test mode and Resend when configured.
 
 ## Analytics
 
