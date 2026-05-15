@@ -20,3 +20,7 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 ## Local Fallbacks
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.
+
+## Course Portability
+
+Course import/export uses a versioned JSON format in `src/lib/course-import-export.ts`. The export contains course structure and resource metadata, but not binary resource files; operators must copy R2 objects or keep exported URLs reachable when migrating between installs.
