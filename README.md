@@ -88,3 +88,4 @@ Add screenshots after first deployment:
 - [Supabase Setup](docs/SUPABASE_SETUP.md)
 - [Stripe Setup](docs/STRIPE_SETUP.md)
 - [R2 Setup](docs/R2_SETUP.md)
+- [Video Strategy](docs/VIDEO_STRATEGY.md)

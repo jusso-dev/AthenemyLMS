@@ -39,6 +39,11 @@ enum AnalyticsScope {
   PLATFORM
 }
 
+enum VideoProvider {
+  EXTERNAL
+  R2
+}
+
 model User {
   id               String           @id @default(cuid())
   clerkId          String           @unique
@@ -102,6 +107,10 @@ model Lesson {
   slug            String
   content         String?
   videoUrl        String?
+  videoProvider   VideoProvider?
+  videoAssetKey   String?
+  videoMimeType   String?
+  videoBytes      Int?
   durationMinutes Int              @default(0)
   preview         Boolean          @default(false)
   position        Int              @default(0)

@@ -25,6 +25,10 @@ Lesson bodies are authored as Markdown through `src/components/forms/rich-lesson
 
 Instructor and admin dashboards read analytics through `src/lib/analytics.ts`. The query layer prefers persisted `AnalyticsRollup` rows for per-course and platform summaries, then derives the same metrics from enrollments, payments, lessons, and lesson progress when rollups have not been generated yet. Indexes on enrollment status, payment status/date, course ownership/status, and lesson completion support realistic dashboard query sizes.
 
+## Video
+
+Lesson videos use a hybrid strategy documented in `docs/VIDEO_STRATEGY.md`: external embed URLs for fast setup and R2-hosted MP4/WebM uploads for self-hosted files. The lesson player renders YouTube, Vimeo, and direct video URLs while metadata remains persisted on the `Lesson` record.
+
 ## Local Fallbacks
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.

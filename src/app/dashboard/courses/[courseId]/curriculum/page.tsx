@@ -84,11 +84,18 @@ export default async function CurriculumPage({
                       {lessonIndex + 1}. {lesson.title}
                     </span>
                   </div>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/edit`}>
-                      Edit lesson
-                    </Link>
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/edit`}>
+                        Edit lesson
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/video`}>
+                        Video
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               ))}
               {mode === "database" && "id" in section ? (

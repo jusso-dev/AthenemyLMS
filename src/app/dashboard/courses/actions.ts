@@ -6,6 +6,7 @@ import {
   courseSchema,
   lessonContentSchema,
   lessonSchema,
+  lessonVideoSchema,
   profileSchema,
   sectionSchema,
 } from "@/lib/course-schemas";
@@ -182,6 +183,49 @@ export async function updateLessonContentAction(
   });
 
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}/edit`);
+  revalidatePath(`/dashboard/learn/${courseId}/lessons/${lessonId}`);
+}
+
+export async function updateLessonVideoAction(
+  courseId: string,
+  lessonId: string,
+  formData: FormData,
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    include: { section: { include: { course: true } } },
+  });
+  if (!lesson || lesson.section.courseId !== courseId) {
+    throw new Error("Lesson not found.");
+  }
+  if (!canManageCourse(user, lesson.section.course)) {
+    throw new Error("You do not have permission to manage this lesson.");
+  }
+
+  const parsed = lessonVideoSchema.parse({
+    videoUrl: formData.get("videoUrl") ?? "",
+    videoProvider: formData.get("videoProvider") ?? "EXTERNAL",
+    videoAssetKey: formData.get("videoAssetKey") ?? "",
+    videoMimeType: formData.get("videoMimeType") ?? "",
+    videoBytes: formData.get("videoBytes") || undefined,
+  });
+
+  await prisma.lesson.update({
+    where: { id: lessonId },
+    data: {
+      videoUrl: parsed.videoUrl || null,
+      videoProvider: parsed.videoUrl ? parsed.videoProvider : null,
+      videoAssetKey: parsed.videoAssetKey || null,
+      videoMimeType: parsed.videoMimeType || null,
+      videoBytes:
+        typeof parsed.videoBytes === "number" ? parsed.videoBytes : null,
+    },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}/video`);
   revalidatePath(`/dashboard/learn/${courseId}/lessons/${lessonId}`);
 }
 

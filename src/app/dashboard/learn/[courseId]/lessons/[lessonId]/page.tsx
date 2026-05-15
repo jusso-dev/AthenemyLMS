@@ -8,6 +8,7 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getLearnCourse } from "@/lib/dashboard-data";
 import { LessonMarkdown } from "@/lib/lesson-markdown";
 import { SetupMessage } from "@/lib/setup-message";
+import { getVideoPlayback } from "@/lib/video";
 
 type ResourceLink = {
   id: string;
@@ -32,6 +33,11 @@ export default async function LessonPlayerPage({
     lesson && "content" in lesson && typeof lesson.content === "string"
       ? lesson.content
       : "";
+  const videoUrl =
+    lesson && "videoUrl" in lesson && typeof lesson.videoUrl === "string"
+      ? lesson.videoUrl
+      : "";
+  const playback = getVideoPlayback(videoUrl);
   const resources: ResourceLink[] =
     lesson && "resources" in lesson && Array.isArray(lesson.resources)
       ? (lesson.resources as ResourceLink[])
@@ -41,12 +47,28 @@ export default async function LessonPlayerPage({
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
       <section className="space-y-5">
-        <div className="aspect-video rounded-lg border bg-[linear-gradient(135deg,var(--primary),var(--secondary))] p-8 text-primary-foreground">
-          <p className="text-sm font-medium opacity-80">Lesson player</p>
-          <h1 className="mt-4 max-w-2xl text-3xl font-semibold">
-            {lesson?.title ?? "Lesson access"}
-          </h1>
-        </div>
+        {playback?.kind === "video" ? (
+          <video
+            controls
+            className="aspect-video w-full rounded-lg border bg-black"
+            src={playback.src}
+          />
+        ) : playback?.kind === "iframe" ? (
+          <iframe
+            className="aspect-video w-full rounded-lg border"
+            src={playback.src}
+            title={playback.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <div className="aspect-video rounded-lg border bg-[linear-gradient(135deg,var(--primary),var(--secondary))] p-8 text-primary-foreground">
+            <p className="text-sm font-medium opacity-80">Lesson player</p>
+            <h1 className="mt-4 max-w-2xl text-3xl font-semibold">
+              {lesson?.title ?? "Lesson access"}
+            </h1>
+          </div>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>Lesson notes</CardTitle>
