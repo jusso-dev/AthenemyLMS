@@ -37,6 +37,10 @@ Courses can include quiz assessments with persisted questions and submissions. R
 
 When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.
 
+## Organisations
+
+Tenant data is stored in Prisma using organisations, memberships, and invitations with optional `clerkOrgId` linkage. Courses can belong to an organisation while existing single-owner courses keep `organizationId` null, preserving current creator workflows. Clerk organisation UI can be added later without changing the local tenant isolation model.
+
 ## Certificates
 
 Completed enrollments can issue one certificate per learner/course when `Course.certificatesEnabled` is true. Public certificate verification uses the certificate number and exposes only course, issuer, and issue date metadata, not private learner profile data.

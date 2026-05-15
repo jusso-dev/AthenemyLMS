@@ -49,24 +49,40 @@ enum AssessmentType {
   ASSIGNMENT
 }
 
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  INSTRUCTOR
+  MEMBER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 model User {
-  id                    String                 @id @default(cuid())
-  clerkId               String                 @unique
-  email                 String                 @unique
-  name                  String?
-  imageUrl              String?
-  stripeCustomerId      String?                @unique
-  role                  Role                   @default(STUDENT)
-  bio                   String?
-  websiteUrl            String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  courses               Course[]               @relation("CourseInstructor")
-  enrollments           Enrollment[]
-  lessonProgress        LessonProgress[]
-  payments              Payment[]
-  assessmentSubmissions AssessmentSubmission[]
-  certificates          Certificate[]
+  id                      String                   @id @default(cuid())
+  clerkId                 String                   @unique
+  email                   String                   @unique
+  name                    String?
+  imageUrl                String?
+  stripeCustomerId        String?                  @unique
+  role                    Role                     @default(STUDENT)
+  bio                     String?
+  websiteUrl              String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  courses                 Course[]                 @relation("CourseInstructor")
+  enrollments             Enrollment[]
+  lessonProgress          LessonProgress[]
+  payments                Payment[]
+  assessmentSubmissions   AssessmentSubmission[]
+  certificates            Certificate[]
+  organizationMemberships OrganizationMembership[]
+  sentInvitations         OrganizationInvitation[] @relation("InvitationInviter")
 
   @@index([role])
 }
@@ -89,6 +105,8 @@ model Course {
   updatedAt           DateTime          @updatedAt
   publishedAt         DateTime?
   instructor          User              @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
+  organizationId      String?
+  organization        Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   sections            CourseSection[]
   enrollments         Enrollment[]
   payments            Payment[]
@@ -97,6 +115,51 @@ model Course {
   certificates        Certificate[]
 
   @@index([instructorId, status])
+  @@index([organizationId, status])
+}
+
+model Organization {
+  id           String                   @id @default(cuid())
+  clerkOrgId   String?                  @unique
+  name         String
+  slug         String                   @unique
+  supportEmail String?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  memberships  OrganizationMembership[]
+  invitations  OrganizationInvitation[]
+  courses      Course[]
+}
+
+model OrganizationMembership {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(MEMBER)
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, role])
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrganizationRole @default(MEMBER)
+  token          String           @unique
+  status         InvitationStatus @default(PENDING)
+  invitedById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User             @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([email, status])
 }
 
 model CourseSection {
