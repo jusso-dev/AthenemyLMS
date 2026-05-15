@@ -10,6 +10,8 @@ export type AppUser = {
   name: string | null;
   imageUrl: string | null;
   role: Role;
+  bio?: string | null;
+  websiteUrl?: string | null;
 };
 
 export function isClerkConfigured() {

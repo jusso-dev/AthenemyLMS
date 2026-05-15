@@ -3,23 +3,18 @@ import { ArrowRight, BookOpen, CircleDollarSign, GraduationCap, Users } from "lu
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { dashboardStats, mockCourses } from "@/lib/mock-data";
 import { getCurrentAppUser, isClerkConfigured } from "@/lib/auth";
 import { SetupMessage } from "@/lib/setup-message";
+import { fallbackNotice, getDashboardOverview } from "@/lib/dashboard-data";
 
 export default async function DashboardPage() {
   const user = await getCurrentAppUser();
+  const overview = await getDashboardOverview(user);
 
   return (
     <div className="space-y-8">
-      {!isClerkConfigured() ? (
-        <SetupMessage
-          title="Local setup mode"
-          items={[
-            "Clerk is not configured, so protected dashboard pages show mock data.",
-            "Add Clerk and Supabase values to .env.local to enable real authentication and persistence.",
-          ]}
-        />
+      {!isClerkConfigured() || overview.mode === "fallback" ? (
+        <SetupMessage {...fallbackNotice()} />
       ) : null}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -40,7 +35,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {dashboardStats.map((stat) => (
+        {overview.stats.map((stat) => (
           <Card key={stat.label}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -60,21 +55,28 @@ export default async function DashboardPage() {
             <CardTitle>Course performance</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {mockCourses.map((course) => (
-              <div key={course.slug} className="rounded-md border p-4">
+            {overview.courses.length === 0 ? (
+              <p className="rounded-md border p-4 text-sm text-muted-foreground">
+                No persisted course activity yet.
+              </p>
+            ) : null}
+            {overview.courses.map((course) => (
+              <div key={course.id} className="rounded-md border p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium">{course.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {course.instructor.name} · {course.level}
+                      {course.instructor.name ?? "Athenemy faculty"} · {course.level}
                     </p>
                   </div>
-                  <Badge variant="success">Published</Badge>
+                  <Badge variant={course.status === "PUBLISHED" ? "success" : "outline"}>
+                    {course.status}
+                  </Badge>
                 </div>
                 <div className="mt-4 h-2 rounded-full bg-muted">
                   <div
                     className="h-2 rounded-full bg-secondary"
-                    style={{ width: `${course.priceCents === 0 ? 81 : 64}%` }}
+                    style={{ width: `${course.progress}%` }}
                   />
                 </div>
               </div>
