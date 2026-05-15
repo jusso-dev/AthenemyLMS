@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { env, IntegrationSetupError, missingEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { assertStripeWebhookConfigured, getStripe } from "@/lib/stripe";
-import { sendCoursePurchaseReceipt } from "@/lib/email";
+import { sendCoursePurchaseReceipt, sendEnrollmentEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
@@ -24,8 +24,14 @@ export async function POST(request: Request) {
       const session = event.data.object;
       const courseId = session.metadata?.courseId;
       const userId = session.metadata?.userId;
+      let courseTitle = courseId ?? "Athenemy course";
 
       if (courseId && userId && missingEnv(["DATABASE_URL"]).length === 0) {
+        const course = await prisma.course.findUnique({
+          where: { id: courseId },
+          select: { title: true },
+        });
+        courseTitle = course?.title ?? courseTitle;
         await prisma.$transaction([
           prisma.enrollment.upsert({
             where: { userId_courseId: { userId, courseId } },
@@ -62,7 +68,11 @@ export async function POST(request: Request) {
       if (session.customer_details?.email) {
         await sendCoursePurchaseReceipt({
           to: session.customer_details.email,
-          courseTitle: courseId ?? "Athenemy course",
+          courseTitle,
+        });
+        await sendEnrollmentEmail({
+          to: session.customer_details.email,
+          courseTitle,
         });
       }
     }

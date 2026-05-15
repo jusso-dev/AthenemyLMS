@@ -7,6 +7,7 @@ import { missingEnv } from "@/lib/env";
 import { hasRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { requireAppUser } from "@/lib/auth";
+import { sendCoursePublishedEmail } from "@/lib/email";
 
 export async function createCourseAction(formData: FormData) {
   if (missingEnv(["DATABASE_URL"]).length > 0) {
@@ -35,6 +36,14 @@ export async function createCourseAction(formData: FormData) {
       publishedAt: parsed.status === "PUBLISHED" ? new Date() : null,
     },
   });
+
+  if (course.status === "PUBLISHED") {
+    await sendCoursePublishedEmail({
+      to: user.email,
+      name: user.name ?? undefined,
+      courseTitle: course.title,
+    });
+  }
 
   revalidatePath("/dashboard/courses");
   redirect(`/dashboard/courses/${course.id}/edit`);

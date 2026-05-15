@@ -83,6 +83,7 @@ Add screenshots after first deployment:
 - [Deployment](docs/DEPLOYMENT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Environment](docs/ENVIRONMENT.md)
+- [Email Setup](docs/EMAIL_SETUP.md)
 - [Clerk Setup](docs/CLERK_SETUP.md)
 - [Supabase Setup](docs/SUPABASE_SETUP.md)
 - [Stripe Setup](docs/STRIPE_SETUP.md)
