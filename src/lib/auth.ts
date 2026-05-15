@@ -9,7 +9,10 @@ export type AppUser = {
   email: string;
   name: string | null;
   imageUrl: string | null;
+  stripeCustomerId?: string | null;
   role: Role;
+  bio?: string | null;
+  websiteUrl?: string | null;
 };
 
 export function isClerkConfigured() {

@@ -15,9 +15,13 @@ type CourseFormValues = z.input<typeof courseSchema>;
 export function CourseForm({
   action,
   defaults,
+  disabled = false,
+  submitLabel = "Save course",
 }: {
   action: (formData: FormData) => void | Promise<void>;
   defaults?: Partial<CourseFormValues>;
+  disabled?: boolean;
+  submitLabel?: string;
 }) {
   const initial = useMemo(
     () => ({ ...courseDefaults(), ...defaults }),
@@ -36,6 +40,7 @@ export function CourseForm({
         </label>
         <Input
           id="title"
+          disabled={disabled}
           {...form.register("title")}
           onBlur={() => {
             if (!form.getValues("slug")) {
@@ -53,26 +58,31 @@ export function CourseForm({
         <label className="text-sm font-medium" htmlFor="slug">
           Slug
         </label>
-        <Input id="slug" {...form.register("slug")} />
+        <Input id="slug" disabled={disabled} {...form.register("slug")} />
       </div>
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="subtitle">
           Subtitle
         </label>
-        <Input id="subtitle" {...form.register("subtitle")} />
+        <Input id="subtitle" disabled={disabled} {...form.register("subtitle")} />
       </div>
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="description">
           Description
         </label>
-        <Textarea id="description" {...form.register("description")} />
+        <Textarea id="description" disabled={disabled} {...form.register("description")} />
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="priceCents">
             Price in cents
           </label>
-          <Input id="priceCents" type="number" {...form.register("priceCents")} />
+          <Input
+            id="priceCents"
+            type="number"
+            disabled={disabled}
+            {...form.register("priceCents")}
+          />
         </div>
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="status">
@@ -80,6 +90,7 @@ export function CourseForm({
           </label>
           <select
             id="status"
+            disabled={disabled}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             {...form.register("status")}
           >
@@ -89,14 +100,21 @@ export function CourseForm({
           </select>
         </div>
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          {...form.register("certificatesEnabled")}
+        />
+        Issue certificates for completed learners
+      </label>
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="thumbnailUrl">
           Thumbnail URL
         </label>
-        <Input id="thumbnailUrl" {...form.register("thumbnailUrl")} />
+        <Input id="thumbnailUrl" disabled={disabled} {...form.register("thumbnailUrl")} />
       </div>
-      <Button type="submit" className="w-fit">
-        Save course
+      <Button type="submit" className="w-fit" disabled={disabled}>
+        {submitLabel}
       </Button>
     </form>
   );

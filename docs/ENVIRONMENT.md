@@ -43,6 +43,12 @@ cp .env.example .env.local
 - `CLOUDFLARE_R2_BUCKET_NAME`
 - `CLOUDFLARE_R2_PUBLIC_BASE_URL`
 
+### Email
+
+- `EMAIL_PROVIDER`: use `stub` for local development or `resend` for transactional delivery.
+- `EMAIL_FROM`: verified sender identity, for example `Athenemy <hello@yourdomain.com>`.
+- `RESEND_API_KEY`: required when `EMAIL_PROVIDER=resend`.
+
 ## Secret Hygiene
 
 `.env`, `.env.local`, and production env files are ignored by Git. Keep real values in local files or your deployment platform secret manager.
