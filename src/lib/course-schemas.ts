@@ -32,6 +32,16 @@ export const lessonContentSchema = lessonSchema.extend({
   content: z.string().max(20000, "Lesson content must stay under 20,000 characters").optional().or(z.literal("")),
 });
 
+export const sectionSchema = z.object({
+  title: z.string().min(2).max(120),
+});
+
+export const profileSchema = z.object({
+  name: z.string().max(120).optional().or(z.literal("")),
+  websiteUrl: z.string().url().optional().or(z.literal("")),
+  bio: z.string().max(2000).optional().or(z.literal("")),
+});
+
 export function courseDefaults(title = "") {
   return {
     title,
