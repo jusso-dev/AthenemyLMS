@@ -13,11 +13,12 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/90",
         outline:
-          "border bg-background text-foreground hover:bg-muted hover:text-foreground",
+          "border bg-background text-foreground hover:border-ring/40 hover:bg-muted hover:text-foreground",
         ghost: "hover:bg-muted hover:text-foreground",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        gold: "bg-[color:var(--gold)] text-white hover:bg-amber-700",
+        gold: "bg-[color:var(--gold)] text-[#071A3D] hover:bg-[color:color-mix(in_oklab,var(--gold)_86%,#071A3D)]",
+        navy: "bg-[#071A3D] text-[#F8FAFC] hover:bg-[#041027]",
       },
       size: {
         default: "h-10 px-4",
@@ -34,7 +35,8 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }

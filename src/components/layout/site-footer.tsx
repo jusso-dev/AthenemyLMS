@@ -14,19 +14,31 @@ export function SiteFooter() {
         </div>
         <div className="space-y-3 text-sm">
           <p className="font-semibold">Product</p>
-          <Link className="block text-muted-foreground hover:text-foreground" href="/courses">
+          <Link
+            className="block text-muted-foreground hover:text-foreground"
+            href="/courses"
+          >
             Catalogue
           </Link>
-          <Link className="block text-muted-foreground hover:text-foreground" href="/pricing">
+          <Link
+            className="block text-muted-foreground hover:text-foreground"
+            href="/pricing"
+          >
             Pricing
           </Link>
         </div>
         <div className="space-y-3 text-sm">
           <p className="font-semibold">Open source</p>
-          <Link className="block text-muted-foreground hover:text-foreground" href="/about">
+          <Link
+            className="block text-muted-foreground hover:text-foreground"
+            href="/about"
+          >
             About
           </Link>
-          <Link className="block text-muted-foreground hover:text-foreground" href="/dashboard">
+          <Link
+            className="block text-muted-foreground hover:text-foreground"
+            href="/dashboard"
+          >
             Dashboard
           </Link>
         </div>

@@ -30,27 +30,31 @@ export function CourseCard({ course }: CourseCardProps) {
   const sectionCount = course._count?.sections ?? course.sections?.length ?? 0;
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
-      <div className="h-32 bg-[linear-gradient(135deg,var(--primary),var(--secondary))] p-5 text-primary-foreground">
-        <BookOpen className="mb-8 h-6 w-6 text-amber-200" aria-hidden="true" />
+    <Card className="flex h-full min-w-0 flex-col overflow-hidden">
+      <div className="h-32 bg-[#071A3D] p-5 text-[#F8FAFC]">
+        <BookOpen className="mb-8 h-6 w-6 text-[#D4AF37]" aria-hidden="true" />
         <p className="text-sm font-medium opacity-90">
           {course.instructor?.name ?? "Athenemy faculty"}
         </p>
       </div>
       <CardHeader>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center justify-between gap-3">
           <Badge variant={course.priceCents === 0 ? "success" : "gold"}>
             {formatPrice(course.priceCents, course.currency)}
           </Badge>
-          <span className="text-xs text-muted-foreground">{course.level}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {course.level}
+          </span>
         </div>
-        <CardTitle className="leading-snug">{course.title}</CardTitle>
+        <CardTitle className="break-words leading-snug">
+          {course.title}
+        </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-5">
         <p className="line-clamp-3 text-sm text-muted-foreground">
           {course.subtitle}
         </p>
-        <div className="mt-auto flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="mt-auto flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
             {Math.max(1, Math.round((course.durationMinutes ?? 0) / 60))}h

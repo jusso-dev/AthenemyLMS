@@ -3,16 +3,15 @@ import type * as React from "react";
 import {
   ArrowDown,
   ArrowUp,
-  Eye,
   Globe2,
+  Images,
   LayoutTemplate,
   Plus,
   Save,
   Send,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/page-header";
@@ -21,11 +20,14 @@ import {
   ActionForm,
   PendingSubmitButton,
 } from "@/components/forms/action-form";
-import { PortalBlocks } from "@/components/portal/portal-renderer";
+import { PortalBlocks, PortalShell } from "@/components/portal/portal-renderer";
+import { PortalStudio } from "@/components/portal/portal-studio";
 import {
   addPortalBlockFormAction,
+  applyPortalTemplateFormAction,
   movePortalBlockFormAction,
   publishPortalFormAction,
+  reorderPortalBlockFormAction,
   updatePortalBlockFormAction,
   updatePortalPageFormAction,
   updatePortalThemeFormAction,
@@ -39,8 +41,10 @@ import {
   editablePortalBlockTypes,
   getPortalBuilderData,
   getPortalPage,
+  imagesToTextarea,
   linksToTextarea,
   portalBlockLabels,
+  portalTemplatePresets,
 } from "@/lib/portal";
 import type { Prisma, PortalBlockType } from "@prisma/client";
 
@@ -50,6 +54,19 @@ export default async function DashboardSitePage() {
   const { organization, portal, courses } = await getPortalBuilderData(user);
   const homePage = getPortalPage(portal, "HOME");
   const theme = portal ? draftTheme(portal) : null;
+  const studioBlocks =
+    homePage?.blocks.map((block, index) => {
+      const config = blockConfig(block);
+      return {
+        id: block.id,
+        label: portalBlockLabels[block.type],
+        summary:
+          config.heading ||
+          config.body ||
+          `${portalBlockLabels[block.type]} block`,
+        position: index,
+      };
+    }) ?? [];
 
   return (
     <div className="max-w-7xl space-y-6">
@@ -101,245 +118,218 @@ export default async function DashboardSitePage() {
             />
           </section>
 
-          <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-            <aside className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Theme</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ActionForm
-                    action={updatePortalThemeFormAction}
-                    className="grid gap-4"
+          <PortalStudio
+            blocks={studioBlocks}
+            statusLabel={portal.status === "PUBLISHED" ? "Published" : "Draft"}
+            publicHref={`/s/${organization.slug}`}
+            reorderAction={reorderPortalBlockFormAction}
+            moveAction={movePortalBlockFormAction}
+            addBlock={
+              <ActionForm
+                action={addPortalBlockFormAction}
+                className="grid gap-3 rounded-md border bg-muted/20 p-4"
+              >
+                <input type="hidden" name="pageId" value={homePage.id} />
+                <label className="grid gap-2 text-sm font-medium">
+                  Add block
+                  <select
+                    name="type"
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
                   >
-                    <input type="hidden" name="portalId" value={portal.id} />
-                    <LabeledInput
-                      label="Logo URL"
-                      name="logoUrl"
-                      defaultValue={theme.logoUrl ?? ""}
-                      placeholder="https://..."
-                    />
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="grid gap-2 text-sm font-medium">
-                        Primary
-                        <Input
-                          aria-label="Primary color"
-                          name="primaryColor"
-                          type="color"
-                          defaultValue={theme.primaryColor}
-                          className="h-10 p-1"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm font-medium">
-                        Accent
-                        <Input
-                          aria-label="Accent color"
-                          name="accentColor"
-                          type="color"
-                          defaultValue={theme.accentColor}
-                          className="h-10 p-1"
-                        />
-                      </label>
-                    </div>
-                    <label className="grid gap-2 text-sm font-medium">
-                      Font
-                      <select
-                        name="fontFamily"
-                        defaultValue={theme.fontFamily}
-                        className="h-10 rounded-md border bg-background px-3 text-sm"
-                      >
-                        <option value="sans">Sans</option>
-                        <option value="serif">Serif</option>
-                        <option value="mono">Mono</option>
-                      </select>
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="grid gap-2 text-sm font-medium">
-                        Button style
-                        <select
-                          name="buttonStyle"
-                          defaultValue={theme.buttonStyle}
-                          className="h-10 rounded-md border bg-background px-3 text-sm"
-                        >
-                          <option value="rounded">Rounded</option>
-                          <option value="square">Square</option>
-                          <option value="pill">Pill</option>
-                        </select>
-                      </label>
-                      <label className="grid gap-2 text-sm font-medium">
-                        Default theme
-                        <select
-                          name="themeMode"
-                          defaultValue={theme.themeMode}
-                          className="h-10 rounded-md border bg-background px-3 text-sm"
-                        >
-                          <option value="system">System</option>
-                          <option value="light">Light</option>
-                          <option value="dark">Dark</option>
-                        </select>
-                      </label>
-                    </div>
-                    <LabeledTextarea
-                      label="Navigation links"
-                      name="navLinks"
-                      rows={4}
-                      defaultValue={linksToTextarea(theme.navLinks)}
-                      hint="One per line: Label|/path"
-                    />
-                    <LabeledTextarea
-                      label="Footer links"
-                      name="footerLinks"
-                      rows={3}
-                      defaultValue={linksToTextarea(theme.footerLinks)}
-                      hint="One per line: Label|/path"
-                    />
-                    <PendingSubmitButton>
-                      <Save className="h-4 w-4" />
-                      Save theme
-                    </PendingSubmitButton>
-                  </ActionForm>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Publish</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Publishing copies the current draft theme and block settings
-                    to the public portal.
-                  </p>
-                  <ActionForm action={publishPortalFormAction}>
-                    <input type="hidden" name="portalId" value={portal.id} />
-                    <PendingSubmitButton>
-                      <Send className="h-4 w-4" />
-                      Publish portal
-                    </PendingSubmitButton>
-                  </ActionForm>
-                </CardContent>
-              </Card>
-            </aside>
-
-            <main className="space-y-6">
-              <Card>
-                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <CardTitle>Homepage</CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Edit focused LMS blocks, then publish when ready.
-                    </p>
-                  </div>
-                  <Badge
-                    variant={
-                      homePage.status === "PUBLISHED" ? "success" : "outline"
-                    }
-                  >
-                    {homePage.status === "PUBLISHED" ? "Public" : "Draft"}
-                  </Badge>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <ActionForm
-                    action={updatePortalPageFormAction}
-                    className="grid gap-4 rounded-md border bg-muted/20 p-4"
-                  >
-                    <input type="hidden" name="pageId" value={homePage.id} />
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <LabeledInput
-                        label="Page title"
-                        name="title"
-                        defaultValue={homePage.title}
-                      />
-                      <LabeledInput
-                        label="SEO title"
-                        name="seoTitle"
-                        defaultValue={homePage.seoTitle ?? ""}
-                      />
-                    </div>
-                    <LabeledTextarea
-                      label="SEO description"
-                      name="seoDescription"
-                      defaultValue={homePage.seoDescription ?? ""}
-                      rows={2}
-                    />
-                    <PendingSubmitButton className="w-fit">
-                      Save page
-                    </PendingSubmitButton>
-                  </ActionForm>
-
-                  <ActionForm
-                    action={addPortalBlockFormAction}
-                    className="flex flex-col gap-3 rounded-md border bg-muted/20 p-4 sm:flex-row sm:items-end"
-                  >
-                    <input type="hidden" name="pageId" value={homePage.id} />
-                    <label className="grid flex-1 gap-2 text-sm font-medium">
-                      Add block
-                      <select
-                        name="type"
-                        className="h-10 rounded-md border bg-background px-3 text-sm"
-                      >
-                        {editablePortalBlockTypes.map((type) => (
-                          <option key={type} value={type}>
-                            {portalBlockLabels[type]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <PendingSubmitButton variant="outline">
-                      <Plus className="h-4 w-4" />
-                      Add
-                    </PendingSubmitButton>
-                  </ActionForm>
-
-                  <div className="space-y-4">
-                    {homePage.blocks.map((block, index) => (
-                      <BlockEditor
-                        key={block.id}
-                        block={block}
-                        index={index}
-                        total={homePage.blocks.length}
-                      />
+                    {editablePortalBlockTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {portalBlockLabels[type]}
+                      </option>
                     ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <CardTitle>Preview</CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Desktop and mobile frames use the draft blocks.
-                    </p>
-                  </div>
-                  <Button asChild variant="outline">
-                    <Link href={`/s/${organization.slug}`}>
-                      <Eye className="h-4 w-4" />
-                      Published view
-                    </Link>
-                  </Button>
-                </CardHeader>
-                <CardContent className="grid gap-5 xl:grid-cols-[1fr_360px]">
-                  <div className="overflow-hidden rounded-md border">
-                    <PortalBlocks
-                      blocks={homePage.blocks}
-                      courses={courses}
-                      organizationSlug={organization.slug}
-                      signedIn
+                  </select>
+                </label>
+                <PendingSubmitButton variant="outline" className="w-fit">
+                  <Plus className="h-4 w-4" />
+                  Add block
+                </PendingSubmitButton>
+              </ActionForm>
+            }
+            pageSettings={
+              <div className="space-y-4">
+                <TemplatePicker pageId={homePage.id} />
+                <ActionForm
+                  action={updatePortalPageFormAction}
+                  className="grid gap-4 rounded-md border bg-muted/20 p-4"
+                >
+                  <input type="hidden" name="pageId" value={homePage.id} />
+                  <LabeledInput
+                    label="Page title"
+                    name="title"
+                    defaultValue={homePage.title}
+                  />
+                  <LabeledInput
+                    label="SEO title"
+                    name="seoTitle"
+                    defaultValue={homePage.seoTitle ?? ""}
+                  />
+                  <LabeledTextarea
+                    label="SEO description"
+                    name="seoDescription"
+                    defaultValue={homePage.seoDescription ?? ""}
+                    rows={2}
+                  />
+                  <PendingSubmitButton className="w-fit">
+                    Save page
+                  </PendingSubmitButton>
+                </ActionForm>
+              </div>
+            }
+            themeSettings={
+              <ActionForm
+                action={updatePortalThemeFormAction}
+                className="grid gap-4 rounded-md border bg-muted/20 p-4"
+              >
+                <input type="hidden" name="portalId" value={portal.id} />
+                <LabeledInput
+                  label="Logo URL"
+                  name="logoUrl"
+                  defaultValue={theme.logoUrl ?? ""}
+                  placeholder="https://..."
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="grid gap-2 text-sm font-medium">
+                    Primary
+                    <Input
+                      aria-label="Primary color"
+                      name="primaryColor"
+                      type="color"
+                      defaultValue={theme.primaryColor}
+                      className="h-10 p-1"
                     />
-                  </div>
-                  <div className="mx-auto w-full max-w-[360px] overflow-hidden rounded-[2rem] border-8 border-foreground/80 bg-background">
-                    <PortalBlocks
-                      blocks={homePage.blocks}
-                      courses={courses}
-                      organizationSlug={organization.slug}
-                      signedIn
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Accent
+                    <Input
+                      aria-label="Accent color"
+                      name="accentColor"
+                      type="color"
+                      defaultValue={theme.accentColor}
+                      className="h-10 p-1"
                     />
-                  </div>
-                </CardContent>
-              </Card>
-            </main>
-          </div>
+                  </label>
+                </div>
+                <label className="grid gap-2 text-sm font-medium">
+                  Font
+                  <select
+                    name="fontFamily"
+                    defaultValue={theme.fontFamily}
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="sans">Sans</option>
+                    <option value="serif">Serif</option>
+                    <option value="mono">Mono</option>
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="grid gap-2 text-sm font-medium">
+                    Button style
+                    <select
+                      name="buttonStyle"
+                      defaultValue={theme.buttonStyle}
+                      className="h-10 rounded-md border bg-background px-3 text-sm"
+                    >
+                      <option value="rounded">Rounded</option>
+                      <option value="square">Square</option>
+                      <option value="pill">Pill</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Default theme
+                    <select
+                      name="themeMode"
+                      defaultValue={theme.themeMode}
+                      className="h-10 rounded-md border bg-background px-3 text-sm"
+                    >
+                      <option value="system">System</option>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                  </label>
+                </div>
+                <LabeledTextarea
+                  label="Navigation links"
+                  name="navLinks"
+                  rows={4}
+                  defaultValue={linksToTextarea(theme.navLinks)}
+                  hint="One per line: Label|/path"
+                />
+                <LabeledTextarea
+                  label="Footer links"
+                  name="footerLinks"
+                  rows={3}
+                  defaultValue={linksToTextarea(theme.footerLinks)}
+                  hint="One per line: Label|/path"
+                />
+                <PendingSubmitButton>
+                  <Save className="h-4 w-4" />
+                  Save theme
+                </PendingSubmitButton>
+              </ActionForm>
+            }
+            publishPanel={
+              <div className="rounded-md border bg-muted/20 p-4">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Publishing copies the current draft theme and block settings
+                  to the public portal.
+                </p>
+                <ActionForm action={publishPortalFormAction} className="mt-4">
+                  <input type="hidden" name="portalId" value={portal.id} />
+                  <PendingSubmitButton>
+                    <Send className="h-4 w-4" />
+                    Publish portal
+                  </PendingSubmitButton>
+                </ActionForm>
+              </div>
+            }
+            blockEditors={homePage.blocks.map((block, index) => ({
+              id: block.id,
+              node: (
+                <BlockEditor
+                  key={block.id}
+                  block={block}
+                  index={index}
+                  total={homePage.blocks.length}
+                />
+              ),
+            }))}
+            desktopPreview={
+              <PortalShell
+                organizationName={organization.name}
+                organizationSlug={organization.slug}
+                theme={theme}
+                signedIn
+              >
+                <PortalBlocks
+                  blocks={homePage.blocks}
+                  courses={courses}
+                  organizationSlug={organization.slug}
+                  signedIn
+                />
+              </PortalShell>
+            }
+            mobilePreview={
+              <PortalShell
+                organizationName={organization.name}
+                organizationSlug={organization.slug}
+                theme={theme}
+                signedIn
+                viewport="mobile-preview"
+              >
+                <PortalBlocks
+                  blocks={homePage.blocks}
+                  courses={courses}
+                  organizationSlug={organization.slug}
+                  signedIn
+                  viewport="mobile-preview"
+                />
+              </PortalShell>
+            }
+          />
         </>
       )}
     </div>
@@ -377,9 +367,21 @@ function BlockEditor({
   total: number;
 }) {
   const config = blockConfig(block);
+  const isImageBlock = block.type === "IMAGE" || block.type === "IMAGE_TEXT";
+  const isGalleryBlock = block.type === "GALLERY";
+  const isCourseBlock =
+    block.type === "FEATURED_COURSES" ||
+    block.type === "COURSE_CATALOG" ||
+    block.type === "COURSE_COLLECTION";
+  const supportsCta =
+    block.type === "HERO" ||
+    block.type === "CTA" ||
+    block.type === "LOGIN_SIGNUP" ||
+    block.type === "IMAGE" ||
+    block.type === "IMAGE_TEXT";
 
   return (
-    <div className="rounded-md border bg-card p-4">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-medium">{portalBlockLabels[block.type]}</p>
@@ -398,10 +400,7 @@ function BlockEditor({
           />
         </div>
       </div>
-      <ActionForm
-        action={updatePortalBlockFormAction}
-        className="mt-4 grid gap-4"
-      >
+      <ActionForm action={updatePortalBlockFormAction} className="grid gap-4">
         <input type="hidden" name="blockId" value={block.id} />
         <div className="grid gap-3 md:grid-cols-2">
           <LabeledInput
@@ -421,37 +420,171 @@ function BlockEditor({
           defaultValue={config.body ?? ""}
           rows={3}
         />
+        {isImageBlock ? (
+          <div className="grid gap-3 rounded-md border bg-background p-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Images className="h-4 w-4 text-muted-foreground" />
+                Image
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Paste a public image URL, such as an image hosted on your site,
+                CDN, or storage bucket. Uploads will move into the media library
+                when that is connected.
+              </p>
+            </div>
+            <LabeledInput
+              label="Image URL"
+              name="imageUrl"
+              defaultValue={config.imageUrl ?? ""}
+              placeholder="https://..."
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              <LabeledInput
+                label="Alt text"
+                name="imageAlt"
+                defaultValue={config.imageAlt ?? ""}
+              />
+              <LabeledInput
+                label="Caption"
+                name="imageCaption"
+                defaultValue={config.imageCaption ?? ""}
+              />
+            </div>
+            <label className="grid gap-2 text-sm font-medium">
+              Layout
+              <select
+                name="imageLayout"
+                defaultValue={config.imageLayout ?? "right"}
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="right">Text left, image right</option>
+                <option value="left">Image left, text right</option>
+                <option value="banner">Full-width image</option>
+              </select>
+            </label>
+          </div>
+        ) : null}
+        {isGalleryBlock ? (
+          <div className="grid gap-3 rounded-md border bg-background p-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Images className="h-4 w-4 text-muted-foreground" />
+                Gallery images
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Add one public image URL per line. Captions are optional.
+              </p>
+            </div>
+            <LabeledTextarea
+              label="Images"
+              name="images"
+              defaultValue={imagesToTextarea(config.images)}
+              rows={6}
+              hint="One per line: Image URL|Alt text|Caption"
+            />
+          </div>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_120px]">
-          <LabeledInput
-            label="CTA label"
-            name="ctaLabel"
-            defaultValue={config.ctaLabel ?? ""}
-          />
-          <LabeledInput
-            label="CTA URL"
-            name="ctaHref"
-            defaultValue={config.ctaHref ?? ""}
-          />
-          <LabeledInput
-            label="Course limit"
-            name="courseLimit"
-            type="number"
-            min={1}
-            max={12}
-            defaultValue={String(config.courseLimit ?? 3)}
-          />
+          {supportsCta ? (
+            <>
+              <LabeledInput
+                label="CTA label"
+                name="ctaLabel"
+                defaultValue={config.ctaLabel ?? ""}
+              />
+              <LabeledInput
+                label="CTA URL"
+                name="ctaHref"
+                defaultValue={config.ctaHref ?? ""}
+              />
+            </>
+          ) : (
+            <>
+              <input
+                type="hidden"
+                name="ctaLabel"
+                value={config.ctaLabel ?? ""}
+              />
+              <input
+                type="hidden"
+                name="ctaHref"
+                value={config.ctaHref ?? ""}
+              />
+            </>
+          )}
+          {isCourseBlock ? (
+            <LabeledInput
+              label="Course limit"
+              name="courseLimit"
+              type="number"
+              min={1}
+              max={12}
+              defaultValue={String(config.courseLimit ?? 3)}
+            />
+          ) : (
+            <input
+              type="hidden"
+              name="courseLimit"
+              value={String(config.courseLimit ?? 3)}
+            />
+          )}
         </div>
-        <LabeledTextarea
-          label="List items"
-          name="items"
-          defaultValue={(config.items ?? []).join("\n")}
-          rows={4}
-          hint="One FAQ, testimonial, or bullet per line."
-        />
+        {!isGalleryBlock ? (
+          <LabeledTextarea
+            label="List items"
+            name="items"
+            defaultValue={(config.items ?? []).join("\n")}
+            rows={4}
+            hint="One FAQ, testimonial, or bullet per line."
+          />
+        ) : null}
         <PendingSubmitButton className="w-fit" variant="outline">
           Save block
         </PendingSubmitButton>
       </ActionForm>
+    </div>
+  );
+}
+
+function TemplatePicker({ pageId }: { pageId: string }) {
+  return (
+    <div className="rounded-md border bg-muted/20 p-4">
+      <div>
+        <h3 className="text-sm font-semibold">Homepage templates</h3>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Replace the current homepage draft with a standard LMS layout.
+        </p>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {portalTemplatePresets.map((template) => (
+          <ActionForm
+            key={template.id}
+            action={applyPortalTemplateFormAction}
+            inlineMessage={false}
+            className="rounded-md border bg-background p-3"
+          >
+            <input type="hidden" name="pageId" value={pageId} />
+            <input type="hidden" name="templateId" value={template.id} />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">{template.name}</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {template.description}
+                </p>
+              </div>
+              <PendingSubmitButton
+                variant="outline"
+                size="sm"
+                pendingLabel="Applying..."
+                className="w-fit shrink-0"
+              >
+                Apply
+              </PendingSubmitButton>
+            </div>
+          </ActionForm>
+        ))}
+      </div>
     </div>
   );
 }

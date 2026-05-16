@@ -80,7 +80,7 @@ export default async function Home() {
                 </Button>
               </div>
             </div>
-            <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <div className="rounded-md border bg-card p-4 shadow-sm">
               <div className="rounded-md border bg-background p-4">
                 <div className="flex items-center justify-between border-b pb-4">
                   <div>
@@ -105,7 +105,7 @@ export default async function Home() {
                     </p>
                   </div>
                 </div>
-                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                <div className="rounded-md border border-dashed border-[color:color-mix(in_oklab,var(--gold)_38%,var(--border))] bg-accent/25 p-4 text-sm text-muted-foreground">
                   Published course activity appears here after your catalogue is
                   connected.
                 </div>
@@ -128,7 +128,9 @@ export default async function Home() {
             {features.map((feature) => (
               <Card key={feature.title}>
                 <CardHeader>
-                  <feature.icon className="h-6 w-6 text-primary" />
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#071A3D] text-[#D4AF37]">
+                    <feature.icon className="h-5 w-5" />
+                  </span>
                   <CardTitle className="text-base">{feature.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -149,7 +151,7 @@ export default async function Home() {
               "Track completion",
             ].map((item) => (
               <div key={item} className="flex gap-3">
-                <CheckCircle2 className="mt-1 h-5 w-5 text-secondary" />
+                <CheckCircle2 className="mt-1 h-5 w-5 text-[color:var(--gold)]" />
                 <div>
                   <h3 className="font-semibold">{item}</h3>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   GraduationCap,
+  Image as ImageIcon,
 } from "lucide-react";
 import { CourseCard } from "@/components/course-card";
 import { PortalThemeToggle } from "@/components/portal/portal-theme-toggle";
@@ -30,19 +31,24 @@ type PortalCourse = React.ComponentProps<typeof CourseCard>["course"] & {
   description?: string | null;
 };
 
+type PortalViewport = "responsive" | "mobile-preview";
+
 export function PortalShell({
   organizationName,
   organizationSlug,
   theme,
   signedIn,
   children,
+  viewport = "responsive",
 }: {
   organizationName: string;
   organizationSlug: string;
   theme: PortalTheme;
   signedIn: boolean;
   children: React.ReactNode;
+  viewport?: PortalViewport;
 }) {
+  const isMobilePreview = viewport === "mobile-preview";
   const rootStyle = {
     "--portal-primary": theme.primaryColor,
     "--portal-accent": theme.accentColor,
@@ -64,10 +70,16 @@ export function PortalShell({
       style={rootStyle}
     >
       <header className="border-b border-[color:var(--portal-border)] bg-[color:var(--portal-chrome)]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+        <div
+          className={cn(
+            "mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3",
+            !isMobilePreview &&
+              "sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8",
+          )}
+        >
           <Link
             href={`/s/${organizationSlug}`}
-            className="flex items-center gap-3"
+            className="flex min-w-0 items-center gap-3"
           >
             {theme.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -81,22 +93,26 @@ export function PortalShell({
                 {organizationName.slice(0, 1).toUpperCase()}
               </span>
             )}
-            <span className="font-semibold">{organizationName}</span>
+            <span className="truncate font-semibold">{organizationName}</span>
           </Link>
           <nav
             aria-label={`${organizationName} portal`}
-            className="flex flex-wrap items-center gap-2"
+            className={cn(
+              "-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 overflow-x-auto px-1 pb-1",
+              !isMobilePreview &&
+                "md:mx-0 md:w-auto md:flex-wrap md:justify-end md:overflow-visible md:px-0 md:pb-0",
+            )}
           >
             {theme.navLinks.map((link) => (
               <Link
                 key={`${link.label}-${link.href}`}
                 href={resolvePortalHref(link.href, organizationSlug)}
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-[color:var(--portal-panel)] hover:text-foreground"
+                className="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-[color:var(--portal-panel)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--portal-primary-text)]"
               >
                 {link.label}
               </Link>
             ))}
-            <Button asChild size="sm">
+            <Button asChild size="sm" className="shrink-0">
               <Link href={signedIn ? "/dashboard/my-courses" : "/sign-in"}>
                 {signedIn ? "Continue learning" : "Sign in"}
               </Link>
@@ -110,7 +126,13 @@ export function PortalShell({
       </header>
       {children}
       <footer className="border-t border-[color:var(--portal-border)] bg-[color:var(--portal-chrome)]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+        <div
+          className={cn(
+            "mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground",
+            !isMobilePreview &&
+              "sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8",
+          )}
+        >
           <p>{organizationName}</p>
           <div className="flex flex-wrap gap-3">
             {theme.footerLinks.map((link) => (
@@ -135,12 +157,14 @@ export function PortalBlocks({
   organizationSlug,
   signedIn,
   published = false,
+  viewport = "responsive",
 }: {
   blocks: PortalBlock[];
   courses: PortalCourse[];
   organizationSlug: string;
   signedIn: boolean;
   published?: boolean;
+  viewport?: PortalViewport;
 }) {
   return (
     <div>
@@ -156,6 +180,7 @@ export function PortalBlocks({
             courses={courses}
             organizationSlug={organizationSlug}
             signedIn={signedIn}
+            viewport={viewport}
           />
         );
       })}
@@ -169,28 +194,48 @@ function PortalBlockSection({
   courses,
   organizationSlug,
   signedIn,
+  viewport,
 }: {
   type: string;
   config: PortalBlockConfig;
   courses: PortalCourse[];
   organizationSlug: string;
   signedIn: boolean;
+  viewport: PortalViewport;
 }) {
+  const isMobilePreview = viewport === "mobile-preview";
+
   if (type === "HERO") {
     return (
       <section className="border-b border-[color:var(--portal-border)] bg-[color:var(--portal-hero)]">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_380px] lg:px-8">
-          <div>
+        <div
+          className={cn(
+            "mx-auto grid max-w-7xl gap-8 px-4 py-12",
+            !isMobilePreview &&
+              "sm:px-6 sm:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)] lg:px-8",
+          )}
+        >
+          <div className="min-w-0">
             {config.eyebrow ? (
               <p className="text-sm font-medium text-[color:var(--portal-primary-text)]">
                 {config.eyebrow}
               </p>
             ) : null}
-            <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-tight">
+            <h1
+              className={cn(
+                "mt-4 max-w-4xl text-3xl font-semibold leading-tight",
+                !isMobilePreview && "sm:text-4xl",
+              )}
+            >
               {config.heading}
             </h1>
             {config.body ? (
-              <p className="mt-4 max-w-2xl text-lg leading-8 text-muted-foreground">
+              <p
+                className={cn(
+                  "mt-4 max-w-2xl text-base leading-7 text-muted-foreground",
+                  !isMobilePreview && "sm:text-lg sm:leading-8",
+                )}
+              >
                 {config.body}
               </p>
             ) : null}
@@ -210,16 +255,21 @@ function PortalBlockSection({
               </Button>
             ) : null}
           </div>
-          <div className="rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-panel)] p-4">
+          <div
+            className={cn(
+              "min-w-0 rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-panel)] p-3",
+              !isMobilePreview && "sm:p-4",
+            )}
+          >
             <div className="space-y-3">
               {(courses.length ? courses.slice(0, 3) : demoCourseRows()).map(
                 (course) => (
                   <div
                     key={course.slug}
-                    className="flex items-start gap-3 rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-3"
+                    className="flex min-w-0 items-start gap-3 rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-3"
                   >
                     <BookOpen className="mt-0.5 h-4 w-4 text-[color:var(--portal-primary-text)]" />
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-medium">{course.title}</p>
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                         {course.subtitle ?? "Published courses appear here."}
@@ -243,10 +293,20 @@ function PortalBlockSection({
     const limit = config.courseLimit ?? (type === "COURSE_CATALOG" ? 6 : 3);
     const visibleCourses = courses.slice(0, limit);
     return (
-      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <section
+        className={cn(
+          "mx-auto max-w-7xl px-4 py-10",
+          !isMobilePreview && "sm:px-6 sm:py-12 lg:px-8",
+        )}
+      >
         <SectionHeading config={config} />
         {visibleCourses.length > 0 ? (
-          <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div
+            className={cn(
+              "mt-6 grid gap-5",
+              !isMobilePreview && "md:grid-cols-2 lg:grid-cols-3",
+            )}
+          >
             {visibleCourses.map((course) => (
               <CourseCard
                 key={course.slug}
@@ -269,9 +329,111 @@ function PortalBlockSection({
     );
   }
 
+  if (type === "IMAGE" || type === "IMAGE_TEXT") {
+    const isSplit = type === "IMAGE_TEXT" && config.imageLayout !== "banner";
+    const imageFirst = config.imageLayout !== "right";
+    const media = (
+      <PortalImage
+        src={config.imageUrl}
+        alt={config.imageAlt}
+        caption={config.imageCaption}
+      />
+    );
+    const copy = (
+      <div className="min-w-0">
+        <SectionHeading config={config} />
+        {config.ctaLabel ? (
+          <Button asChild className="mt-6">
+            <Link
+              href={portalCtaHref(config.ctaHref, organizationSlug, signedIn)}
+            >
+              {signedIn && config.ctaHref === "/sign-in"
+                ? "Continue learning"
+                : config.ctaLabel}
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+    );
+
+    return (
+      <section
+        className={cn(
+          "mx-auto max-w-7xl px-4 py-10",
+          !isMobilePreview && "sm:px-6 sm:py-12 lg:px-8",
+        )}
+      >
+        {isSplit ? (
+          <div
+            className={cn(
+              "grid gap-6",
+              !isMobilePreview &&
+                "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)] lg:items-center",
+            )}
+          >
+            {imageFirst ? media : copy}
+            {imageFirst ? copy : media}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {copy}
+            {media}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (type === "GALLERY") {
+    const images =
+      config.images && config.images.length > 0
+        ? config.images
+        : [
+            { url: "", alt: "Course preview", caption: "Course preview" },
+            { url: "", alt: "Learner outcome", caption: "Learner outcome" },
+            {
+              url: "",
+              alt: "Training experience",
+              caption: "Training experience",
+            },
+          ];
+
+    return (
+      <section
+        className={cn(
+          "mx-auto max-w-7xl px-4 py-10",
+          !isMobilePreview && "sm:px-6 sm:py-12 lg:px-8",
+        )}
+      >
+        <SectionHeading config={config} />
+        <div
+          className={cn(
+            "mt-6 grid gap-4",
+            !isMobilePreview && "md:grid-cols-2 lg:grid-cols-3",
+          )}
+        >
+          {images.map((image, index) => (
+            <PortalImage
+              key={`${image.url}-${image.alt}-${index}`}
+              src={image.url}
+              alt={image.alt}
+              caption={image.caption}
+              compact
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   if (type === "FAQ") {
     return (
-      <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <section
+        className={cn(
+          "mx-auto max-w-4xl px-4 py-10",
+          !isMobilePreview && "sm:px-6 sm:py-12 lg:px-8",
+        )}
+      >
         <SectionHeading config={config} />
         <div className="mt-6 space-y-3">
           {(config.items ?? []).map((item) => (
@@ -284,7 +446,12 @@ function PortalBlockSection({
 
   if (type === "TESTIMONIALS") {
     return (
-      <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <section
+        className={cn(
+          "mx-auto max-w-4xl px-4 py-10",
+          !isMobilePreview && "sm:px-6 sm:py-12 lg:px-8",
+        )}
+      >
         <SectionHeading config={config} />
         <div className="mt-6 space-y-3">
           {(config.items ?? []).map((item) => (
@@ -302,8 +469,18 @@ function PortalBlockSection({
 
   if (type === "CTA" || type === "LOGIN_SIGNUP") {
     return (
-      <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-6 sm:p-8">
+      <section
+        className={cn(
+          "mx-auto max-w-5xl px-4 py-10",
+          !isMobilePreview && "sm:px-6 sm:py-12 lg:px-8",
+        )}
+      >
+        <div
+          className={cn(
+            "rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-5",
+            !isMobilePreview && "sm:p-8",
+          )}
+        >
           <SectionHeading config={config} />
           {config.ctaLabel ? (
             <Button asChild className="mt-6">
@@ -322,7 +499,12 @@ function PortalBlockSection({
   }
 
   return (
-    <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+    <section
+      className={cn(
+        "mx-auto max-w-4xl px-4 py-10",
+        !isMobilePreview && "sm:px-6 sm:py-12 lg:px-8",
+      )}
+    >
       <SectionHeading config={config} />
       {config.items?.length ? (
         <ul className="mt-5 space-y-3">
@@ -357,6 +539,55 @@ function SectionHeading({ config }: { config: PortalBlockConfig }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+function PortalImage({
+  src,
+  alt,
+  caption,
+  compact = false,
+}: {
+  src?: string;
+  alt?: string;
+  caption?: string;
+  compact?: boolean;
+}) {
+  return (
+    <figure className="overflow-hidden rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-card)]">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt ?? ""}
+          className={cn(
+            "w-full bg-[color:var(--portal-panel)] object-cover",
+            compact ? "aspect-[4/3]" : "aspect-video",
+          )}
+          loading="lazy"
+        />
+      ) : (
+        <div
+          className={cn(
+            "flex w-full flex-col items-center justify-center gap-3 bg-[color:var(--portal-panel)] p-8 text-center text-muted-foreground",
+            compact ? "aspect-[4/3]" : "aspect-video",
+          )}
+        >
+          <ImageIcon
+            className="h-8 w-8 text-[color:var(--portal-primary-text)]"
+            aria-hidden="true"
+          />
+          <span className="text-sm font-medium">
+            Add an image URL in the portal builder.
+          </span>
+        </div>
+      )}
+      {caption ? (
+        <figcaption className="border-t border-[color:var(--portal-border)] px-4 py-3 text-sm text-muted-foreground">
+          {caption}
+        </figcaption>
+      ) : null}
+    </figure>
   );
 }
 

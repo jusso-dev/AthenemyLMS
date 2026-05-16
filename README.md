@@ -1,5 +1,9 @@
 # Athenemy
 
+<p>
+  <img src="./public/athena-lms-logo.png" alt="Athenemy logo" width="360" />
+</p>
+
 Wisdom, structured into courses.
 
 Athenemy is a modern self-hostable LMS for creators, teams, and small organisations. It provides a production-oriented MVP for selling, delivering, and tracking online courses with a clean Next.js app, role-aware dashboards, Supabase Postgres persistence, Clerk authentication, Cloudflare R2 uploads, and Stripe payments.

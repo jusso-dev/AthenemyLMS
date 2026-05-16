@@ -13,6 +13,12 @@ export type PortalLink = {
   href: string;
 };
 
+export type PortalImageItem = {
+  url: string;
+  alt: string;
+  caption?: string;
+};
+
 export type PortalBlockConfig = {
   eyebrow?: string;
   heading?: string;
@@ -21,6 +27,11 @@ export type PortalBlockConfig = {
   ctaHref?: string;
   courseLimit?: number;
   items?: string[];
+  imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
+  imageLayout?: "left" | "right" | "banner";
+  images?: PortalImageItem[];
 };
 
 export type PortalTheme = {
@@ -47,7 +58,9 @@ export const portalBlockLabels: Record<PortalBlockType, string> = {
   FEATURED_COURSES: "Featured courses",
   COURSE_CATALOG: "Course catalogue",
   RICH_TEXT: "Rich text",
+  IMAGE: "Image",
   IMAGE_TEXT: "Image and text",
+  GALLERY: "Image gallery",
   INSTRUCTOR_PROFILE: "Instructor profile",
   TESTIMONIALS: "Testimonials",
   FAQ: "FAQ",
@@ -64,7 +77,10 @@ export const editablePortalBlockTypes = [
   "FEATURED_COURSES",
   "COURSE_CATALOG",
   "RICH_TEXT",
+  "IMAGE",
   "INSTRUCTOR_PROFILE",
+  "IMAGE_TEXT",
+  "GALLERY",
   "TESTIMONIALS",
   "FAQ",
   "CTA",
@@ -258,8 +274,8 @@ export function draftTheme(portal: {
 }): PortalTheme {
   return {
     logoUrl: portal.logoUrl,
-    primaryColor: normalizeHex(portal.primaryColor, "#1e3a8a"),
-    accentColor: normalizeHex(portal.accentColor, "#0f766e"),
+    primaryColor: normalizeHex(portal.primaryColor, "#071A3D"),
+    accentColor: normalizeHex(portal.accentColor, "#D4AF37"),
     fontFamily: portal.fontFamily,
     buttonStyle: portal.buttonStyle,
     themeMode: normalizeThemeMode(portal.themeMode),
@@ -287,11 +303,11 @@ export function publishedTheme(portal: {
           : null,
       primaryColor: normalizeHex(
         String(portal.publishedTheme.primaryColor ?? ""),
-        "#1e3a8a",
+        "#071A3D",
       ),
       accentColor: normalizeHex(
         String(portal.publishedTheme.accentColor ?? ""),
-        "#0f766e",
+        "#D4AF37",
       ),
       fontFamily: String(portal.publishedTheme.fontFamily ?? "sans"),
       buttonStyle: String(portal.publishedTheme.buttonStyle ?? "rounded"),
@@ -345,6 +361,17 @@ export function parseLinksInput(input: string, fallback: PortalLink[]) {
   return links.length > 0 ? links : fallback;
 }
 
+export function imagesToTextarea(images: PortalImageItem[] | undefined) {
+  return (images ?? [])
+    .map((image) =>
+      [image.url, image.alt, image.caption]
+        .map((value) => value?.trim())
+        .filter(Boolean)
+        .join("|"),
+    )
+    .join("\n");
+}
+
 export function normalizeBlockConfig(
   value: Prisma.JsonValue | undefined | null,
 ) {
@@ -356,6 +383,7 @@ export function normalizeBlockConfig(
     typeof value.courseLimit === "number" && Number.isFinite(value.courseLimit)
       ? Math.max(1, Math.min(12, Math.round(value.courseLimit)))
       : undefined;
+  const imageLayout = stringValue(value.imageLayout);
 
   return {
     eyebrow: stringValue(value.eyebrow),
@@ -365,6 +393,16 @@ export function normalizeBlockConfig(
     ctaHref: stringValue(value.ctaHref),
     courseLimit,
     items,
+    imageUrl: stringValue(value.imageUrl),
+    imageAlt: stringValue(value.imageAlt),
+    imageCaption: stringValue(value.imageCaption),
+    imageLayout:
+      imageLayout === "right" || imageLayout === "banner"
+        ? imageLayout
+        : imageLayout === "left"
+          ? "left"
+          : undefined,
+    images: normalizeImages(value.images),
   } satisfies PortalBlockConfig;
 }
 
@@ -395,6 +433,45 @@ export function defaultBlockConfig(type: PortalBlockType): PortalBlockConfig {
       return {
         heading: "About this school",
         body: "Share what learners can expect, who the training is for, and how your organisation supports their progress.",
+      };
+    case "IMAGE":
+      return {
+        eyebrow: "Learning environment",
+        heading: "Show learners what to expect",
+        body: "Add a classroom, cohort, product, or course image that gives this section visual context.",
+        imageAlt: "Learning portal image",
+        imageLayout: "banner",
+      };
+    case "IMAGE_TEXT":
+      return {
+        eyebrow: "Why learn here",
+        heading: "A focused learning experience",
+        body: "Pair a strong image with a short explanation of your learning approach, outcomes, or community.",
+        imageAlt: "Learner experience image",
+        imageLayout: "right",
+      };
+    case "GALLERY":
+      return {
+        eyebrow: "Inside the academy",
+        heading: "Learning in action",
+        body: "Use a gallery for screenshots, outcomes, events, facilities, or course previews.",
+        images: [
+          {
+            url: "",
+            alt: "Course preview",
+            caption: "Course preview",
+          },
+          {
+            url: "",
+            alt: "Learner outcome",
+            caption: "Learner outcome",
+          },
+          {
+            url: "",
+            alt: "Training experience",
+            caption: "Training experience",
+          },
+        ],
       };
     case "INSTRUCTOR_PROFILE":
       return {
@@ -437,6 +514,118 @@ export function defaultBlockConfig(type: PortalBlockType): PortalBlockConfig {
         body: "Configure this block from the portal builder.",
       };
   }
+}
+
+export const portalTemplatePresets = [
+  {
+    id: "course-academy",
+    name: "Course academy",
+    description:
+      "A balanced public homepage with a hero, featured courses, visual trust section, gallery, FAQ, and CTA.",
+    blocks: [
+      { type: "HERO" as const, config: defaultBlockConfig("HERO") },
+      {
+        type: "FEATURED_COURSES" as const,
+        config: defaultBlockConfig("FEATURED_COURSES"),
+      },
+      {
+        type: "IMAGE_TEXT" as const,
+        config: {
+          ...defaultBlockConfig("IMAGE_TEXT"),
+          heading: "Built for practical progress",
+          body: "Show learners the environment, outcomes, or teaching style that makes your courses worth starting.",
+        },
+      },
+      { type: "GALLERY" as const, config: defaultBlockConfig("GALLERY") },
+      { type: "FAQ" as const, config: defaultBlockConfig("FAQ") },
+      { type: "CTA" as const, config: defaultBlockConfig("CTA") },
+    ],
+  },
+  {
+    id: "cohort-launch",
+    name: "Cohort launch",
+    description:
+      "A launch-page structure for time-bound programs, workshops, and new course campaigns.",
+    blocks: [
+      {
+        type: "HERO" as const,
+        config: {
+          ...defaultBlockConfig("HERO"),
+          eyebrow: "Enrollment open",
+          heading: "Join the next learning cohort",
+          body: "Introduce the outcome, timeline, and learner commitment clearly so visitors know whether this program is right for them.",
+          ctaLabel: "Browse courses",
+          ctaHref: "./courses",
+        },
+      },
+      { type: "IMAGE" as const, config: defaultBlockConfig("IMAGE") },
+      {
+        type: "RICH_TEXT" as const,
+        config: {
+          heading: "What learners will accomplish",
+          body: "Describe the concrete skills, projects, or credentials learners will finish with.",
+        },
+      },
+      {
+        type: "COURSE_COLLECTION" as const,
+        config: {
+          eyebrow: "Program courses",
+          heading: "Included courses",
+          body: "Published courses in this launch appear here.",
+          courseLimit: 6,
+        },
+      },
+      {
+        type: "TESTIMONIALS" as const,
+        config: defaultBlockConfig("TESTIMONIALS"),
+      },
+      { type: "CTA" as const, config: defaultBlockConfig("CTA") },
+    ],
+  },
+  {
+    id: "internal-training",
+    name: "Internal training",
+    description:
+      "A quieter portal for employee onboarding, enablement, compliance, or customer education.",
+    blocks: [
+      {
+        type: "HERO" as const,
+        config: {
+          ...defaultBlockConfig("HERO"),
+          eyebrow: "Team learning",
+          heading: "Training resources for your team",
+          body: "Give members a clear place to find required learning, recommended courses, and helpful references.",
+          ctaLabel: "Continue learning",
+          ctaHref: "/dashboard/my-courses",
+        },
+      },
+      {
+        type: "COURSE_CATALOG" as const,
+        config: {
+          ...defaultBlockConfig("COURSE_CATALOG"),
+          heading: "Required and recommended courses",
+        },
+      },
+      {
+        type: "RICH_TEXT" as const,
+        config: {
+          heading: "How training works",
+          body: "Explain expectations, completion requirements, support channels, and how learners should ask for help.",
+        },
+      },
+      { type: "FAQ" as const, config: defaultBlockConfig("FAQ") },
+    ],
+  },
+] as const;
+
+export type PortalTemplateId = (typeof portalTemplatePresets)[number]["id"];
+
+export const portalTemplateIds = portalTemplatePresets.map(
+  (template) => template.id,
+) as [PortalTemplateId, ...PortalTemplateId[]];
+
+export function portalTemplateById(id: string) {
+  return portalTemplatePresets.find((template) => template.id === id) ?? null;
 }
 
 function defaultPortalPages() {
@@ -537,6 +726,25 @@ function defaultNavLinks(): PortalLink[] {
 
 function defaultFooterLinks(): PortalLink[] {
   return [{ label: "Dashboard", href: "/dashboard" }];
+}
+
+function normalizeImages(value: unknown): PortalImageItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const images = value
+    .map((item) => {
+      if (!isObject(item)) return null;
+      const url = stringValue(item.url)?.trim();
+      const alt = stringValue(item.alt)?.trim();
+      const caption = stringValue(item.caption)?.trim();
+      if (!url && !alt && !caption) return null;
+      return {
+        url: url ?? "",
+        alt: alt || caption || "Gallery image",
+        ...(caption ? { caption } : {}),
+      };
+    })
+    .filter((item): item is PortalImageItem => Boolean(item));
+  return images.length > 0 ? images : undefined;
 }
 
 function stringValue(value: unknown) {

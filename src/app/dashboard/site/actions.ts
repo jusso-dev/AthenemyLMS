@@ -16,6 +16,8 @@ import {
   draftTheme,
   editablePortalBlockTypes,
   parseLinksInput,
+  portalTemplateById,
+  portalTemplateIds,
 } from "@/lib/portal";
 
 const themeSchema = z.object({
@@ -50,6 +52,15 @@ const blockSchema = z.object({
   ctaHref: z.string().max(300).optional().or(z.literal("")),
   courseLimit: z.coerce.number().int().min(1).max(12).default(3),
   items: z.string().max(4000).optional().or(z.literal("")),
+  imageUrl: z
+    .string()
+    .url("Use a valid image URL")
+    .optional()
+    .or(z.literal("")),
+  imageAlt: z.string().max(140).optional().or(z.literal("")),
+  imageCaption: z.string().max(180).optional().or(z.literal("")),
+  imageLayout: z.enum(["left", "right", "banner"]).default("right"),
+  images: z.string().max(8000).optional().or(z.literal("")),
 });
 
 const addBlockSchema = z.object({
@@ -62,8 +73,19 @@ const moveBlockSchema = z.object({
   direction: z.enum(["up", "down"]),
 });
 
+const reorderBlockSchema = z.object({
+  draggedBlockId: z.string().min(1),
+  targetBlockId: z.string().min(1),
+  placement: z.enum(["before", "after"]).default("before"),
+});
+
 const publishSchema = z.object({
   portalId: z.string().min(1),
+});
+
+const templateSchema = z.object({
+  pageId: z.string().min(1),
+  templateId: z.enum(portalTemplateIds),
 });
 
 export async function updatePortalThemeFormAction(
@@ -151,6 +173,11 @@ export async function updatePortalBlockFormAction(
       ctaHref: formData.get("ctaHref") ?? "",
       courseLimit: formData.get("courseLimit") ?? 3,
       items: formData.get("items") ?? "",
+      imageUrl: formData.get("imageUrl") ?? "",
+      imageAlt: formData.get("imageAlt") ?? "",
+      imageCaption: formData.get("imageCaption") ?? "",
+      imageLayout: formData.get("imageLayout") ?? "right",
+      images: formData.get("images") ?? "",
     });
     const block = await requireBlockAdmin(parsed.blockId);
 
@@ -165,6 +192,11 @@ export async function updatePortalBlockFormAction(
           ctaHref: parsed.ctaHref || undefined,
           courseLimit: parsed.courseLimit,
           items: parseItems(parsed.items ?? ""),
+          imageUrl: parsed.imageUrl || undefined,
+          imageAlt: parsed.imageAlt || undefined,
+          imageCaption: parsed.imageCaption || undefined,
+          imageLayout: parsed.imageLayout,
+          images: parseImageItems(parsed.images ?? ""),
         },
       },
     });
@@ -203,6 +235,39 @@ export async function addPortalBlockFormAction(
   }, "Block added.");
 }
 
+export async function applyPortalTemplateFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runPortalAction(async () => {
+    assertDatabase();
+    const parsed = templateSchema.parse({
+      pageId: formData.get("pageId"),
+      templateId: formData.get("templateId"),
+    });
+    const page = await requirePageAdmin(parsed.pageId);
+    if (page.type !== "HOME") {
+      throw new Error("Templates can only be applied to the homepage.");
+    }
+    const template = portalTemplateById(parsed.templateId);
+    if (!template) throw new Error("Template not found.");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.portalBlock.deleteMany({ where: { pageId: page.id } });
+      await tx.portalBlock.createMany({
+        data: template.blocks.map((block, position) => ({
+          pageId: page.id,
+          type: block.type,
+          position,
+          config: block.config,
+        })),
+      });
+    });
+
+    revalidatePortal(page.portal.organization.slug);
+  }, "Homepage template applied.");
+}
+
 export async function movePortalBlockFormAction(
   _previousState: ActionFormState,
   formData: FormData,
@@ -236,6 +301,64 @@ export async function movePortalBlockFormAction(
     ]);
 
     revalidatePortal(block.page.portal.organization.slug);
+  }, "Block order updated.");
+}
+
+export async function reorderPortalBlockFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runPortalAction(async () => {
+    assertDatabase();
+    const parsed = reorderBlockSchema.parse({
+      draggedBlockId: formData.get("draggedBlockId"),
+      targetBlockId: formData.get("targetBlockId"),
+      placement: formData.get("placement"),
+    });
+    if (parsed.draggedBlockId === parsed.targetBlockId) return;
+
+    const draggedBlock = await requireBlockAdmin(parsed.draggedBlockId);
+    const targetBlock = await prisma.portalBlock.findUnique({
+      where: { id: parsed.targetBlockId },
+      include: {
+        page: { include: { portal: { include: { organization: true } } } },
+      },
+    });
+    if (!targetBlock) throw new Error("Target block not found.");
+    if (targetBlock.pageId !== draggedBlock.pageId) {
+      throw new Error("Blocks can only be reordered within the same page.");
+    }
+
+    const blocks = await prisma.portalBlock.findMany({
+      where: { pageId: draggedBlock.pageId },
+      orderBy: { position: "asc" },
+      select: { id: true },
+    });
+    const withoutDragged = blocks.filter(
+      (block) => block.id !== parsed.draggedBlockId,
+    );
+    const targetIndex = withoutDragged.findIndex(
+      (block) => block.id === parsed.targetBlockId,
+    );
+    if (targetIndex === -1) return;
+
+    const nextBlocks = [...withoutDragged];
+    nextBlocks.splice(
+      parsed.placement === "after" ? targetIndex + 1 : targetIndex,
+      0,
+      { id: parsed.draggedBlockId },
+    );
+
+    await prisma.$transaction(
+      nextBlocks.map((block, position) =>
+        prisma.portalBlock.update({
+          where: { id: block.id },
+          data: { position },
+        }),
+      ),
+    );
+
+    revalidatePortal(draggedBlock.page.portal.organization.slug);
   }, "Block order updated.");
 }
 
@@ -357,6 +480,22 @@ function parseItems(input: string) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function parseImageItems(input: string) {
+  return input
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [url, alt, caption] = line.split("|").map((value) => value.trim());
+      return {
+        url: url ?? "",
+        alt: alt || caption || "Gallery image",
+        caption: caption || undefined,
+      };
+    })
+    .filter((image) => image.url || image.alt || image.caption);
 }
 
 function revalidatePortal(organizationSlug: string) {

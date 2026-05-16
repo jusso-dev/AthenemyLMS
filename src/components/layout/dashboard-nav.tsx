@@ -28,7 +28,13 @@ function isActive(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function DashboardNav({ className }: { className?: string }) {
+export function DashboardNav({
+  className,
+  tone = "default",
+}: {
+  className?: string;
+  tone?: "default" | "navy";
+}) {
   const pathname = usePathname();
 
   return (
@@ -43,11 +49,20 @@ export function DashboardNav({ className }: { className?: string }) {
             aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              tone === "navy" &&
+                "text-[#C8D2E3] hover:bg-white/10 hover:text-white",
               active && "bg-muted text-foreground shadow-sm",
+              tone === "navy" &&
+                active &&
+                "bg-white/10 text-white shadow-none ring-1 ring-white/10",
             )}
           >
             <item.icon
-              className={cn("h-4 w-4", active && "text-primary")}
+              className={cn(
+                "h-4 w-4",
+                active && "text-primary",
+                tone === "navy" && active && "text-[#D4AF37]",
+              )}
               aria-hidden="true"
             />
             {item.label}
@@ -79,11 +94,15 @@ export function DashboardMobileNav({ className }: { className?: string }) {
             aria-current={active ? "page" : undefined}
             className={cn(
               "inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              active && "bg-muted text-foreground",
+              active &&
+                "bg-[#071A3D] text-white dark:bg-muted dark:text-foreground",
             )}
           >
             <item.icon
-              className={cn("h-4 w-4", active && "text-primary")}
+              className={cn(
+                "h-4 w-4",
+                active && "text-[#D4AF37] dark:text-primary",
+              )}
               aria-hidden="true"
             />
             {item.label}

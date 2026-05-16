@@ -81,7 +81,9 @@ enum PortalBlockType {
   FEATURED_COURSES
   COURSE_CATALOG
   RICH_TEXT
+  IMAGE
   IMAGE_TEXT
+  GALLERY
   INSTRUCTOR_PROFILE
   TESTIMONIALS
   FAQ
@@ -198,8 +200,8 @@ model OrganizationPortal {
   organizationId String       @unique
   status         PortalStatus @default(DRAFT)
   logoUrl        String?
-  primaryColor   String       @default("#1e3a8a")
-  accentColor    String       @default("#0f766e")
+  primaryColor   String       @default("#071A3D")
+  accentColor    String       @default("#D4AF37")
   fontFamily     String       @default("sans")
   buttonStyle    String       @default("rounded")
   themeMode      String       @default("system")

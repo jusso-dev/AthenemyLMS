@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
+  <title id="title">Athenemy logo</title>
+  <desc id="desc">Gold Athena-inspired crest and Athenemy wordmark on a deep navy background.</desc>
+  <rect width="720" height="180" rx="28" fill="#071A3D"/>
+  <g transform="translate(44 22)" fill="none" stroke="#D4AF37" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M68 6c24 0 38 13 46 26 5 9 15 12 24 15v40c0 32-23 51-70 64C21 138-2 119-2 87V47c9-3 19-6 24-15C30 19 44 6 68 6Z" stroke-width="4"/>
+    <path d="M68 18c18 0 30 9 38 21 5 8 13 12 22 15v30c0 26-18 42-60 54C26 126 8 110 8 84V54c9-3 17-7 22-15 8-12 20-21 38-21Z" stroke-width="2.2" opacity=".7"/>
+    <path d="M49 78c10-12 24-16 42-13-11 12-25 18-42 13Z" fill="#071A3D" stroke-width="4"/>
+    <path d="M54 75c9 3 19 2 29-5" stroke-width="3"/>
+    <path d="M63 48c17-9 35-8 52 3-13 2-27 6-39 15" stroke-width="4"/>
+    <path d="M60 52c-5 13-5 26 1 39" stroke-width="4"/>
+    <path d="M54 53c-2 12-1 24 4 36" stroke-width="2"/>
+    <path d="M42 62c-5 10-6 21-2 33" stroke-width="2"/>
+    <path d="M78 90c12-2 23-8 31-18" stroke-width="2.8"/>
+    <path d="M80 88c11 0 21 4 28 12" stroke-width="2.4"/>
+    <path d="M78 92c8 7 14 16 16 27" stroke-width="2.4"/>
+    <path d="M89 86c15-2 28 2 40 13" stroke-width="2.2"/>
+    <path d="M84 55c-1 10-4 20-11 28" stroke-width="2.2"/>
+    <path d="M71 55c-1 9-4 17-10 24" stroke-width="2.2"/>
+    <path d="M98 56c-3 7-8 13-15 18" stroke-width="2.2"/>
+    <path d="M56 108c8-6 19-9 33-8v28c-14-1-25-5-33-12v-8Z" stroke-width="3"/>
+    <path d="M89 100c14-1 25 2 33 8v8c-8 7-19 11-33 12v-28Z" stroke-width="3"/>
+    <path d="M65 111c7 2 14 5 20 9" stroke-width="1.8"/>
+    <path d="M113 111c-7 2-14 5-20 9" stroke-width="1.8"/>
+    <path d="M18 104c11 6 21 12 31 18" stroke-width="2"/>
+    <path d="M27 93c2 8 3 16 1 24" stroke-width="2"/>
+    <path d="M36 86c2 8 2 16-1 24" stroke-width="2"/>
+    <path d="M118 122c10-6 20-12 31-18" stroke-width="2"/>
+    <path d="M139 93c-2 8-3 16-1 24" stroke-width="2"/>
+    <path d="M130 86c-2 8-2 16 1 24" stroke-width="2"/>
+    <path d="M68 33l4 8 8 4-8 4-4 8-4-8-8-4 8-4 4-8Z" stroke-width="1.8"/>
+    <path d="M31 41l2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4Z" stroke-width="1.6"/>
+    <path d="M112 43l2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4Z" stroke-width="1.6"/>
+  </g>
+  <g fill="#D4AF37">
+    <text x="230" y="111" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="60" font-weight="650" letter-spacing="0">Athenemy</text>
+  </g>
+</svg>
