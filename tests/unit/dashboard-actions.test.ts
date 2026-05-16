@@ -9,11 +9,14 @@ const mocks = vi.hoisted(() => {
     },
     courseSection: {
       create: vi.fn(),
+      findMany: vi.fn(),
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     lesson: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     lessonProgress: {
       upsert: vi.fn(),
@@ -24,6 +27,7 @@ const mocks = vi.hoisted(() => {
     user: {
       update: vi.fn(),
     },
+    $transaction: vi.fn(async (operations: unknown[]) => operations),
   };
 
   return {
@@ -45,6 +49,8 @@ import {
   createLessonAction,
   createSectionAction,
   markLessonCompleteAction,
+  moveLessonFormAction,
+  moveSectionFormAction,
   updateCourseAction,
 } from "@/app/dashboard/courses/actions";
 
@@ -211,5 +217,96 @@ describe("dashboard course actions", () => {
       "enrolled",
     );
     expect(mocks.prisma.lessonProgress.upsert).not.toHaveBeenCalled();
+  });
+
+  it("moves a section and persists normalized section positions", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      sections: [
+        { id: "section_1", position: 0 },
+        { id: "section_2", position: 1 },
+        { id: "section_3", position: 2 },
+      ],
+    });
+    mocks.prisma.courseSection.update.mockImplementation((input) => input);
+
+    await expect(
+      moveSectionFormAction(
+        "course_1",
+        "section_2",
+        "up",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Section order saved.",
+    });
+
+    expect(mocks.prisma.courseSection.update).toHaveBeenCalledTimes(3);
+    expect(mocks.prisma.courseSection.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "section_2" },
+      data: { position: 0 },
+    });
+    expect(mocks.prisma.courseSection.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "section_1" },
+      data: { position: 1 },
+    });
+    expect(mocks.prisma.courseSection.update).toHaveBeenNthCalledWith(3, {
+      where: { id: "section_3" },
+      data: { position: 2 },
+    });
+  });
+
+  it("moves a lesson across adjacent sections and normalizes lesson positions", async () => {
+    mocks.prisma.lesson.findUnique.mockResolvedValue({
+      id: "lesson_2",
+      section: {
+        courseId: "course_1",
+        course: { id: "course_1", instructorId: "user_1" },
+      },
+    });
+    mocks.prisma.courseSection.findMany.mockResolvedValue([
+      {
+        id: "section_1",
+        lessons: [
+          { id: "lesson_1", position: 0 },
+          { id: "lesson_2", position: 1 },
+        ],
+      },
+      {
+        id: "section_2",
+        lessons: [{ id: "lesson_3", position: 0 }],
+      },
+    ]);
+    mocks.prisma.lesson.update.mockImplementation((input) => input);
+
+    await expect(
+      moveLessonFormAction(
+        "course_1",
+        "lesson_2",
+        "down",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Lesson order saved.",
+    });
+
+    expect(mocks.prisma.lesson.update).toHaveBeenCalledTimes(3);
+    expect(mocks.prisma.lesson.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "lesson_1" },
+      data: { sectionId: "section_1", position: 0 },
+    });
+    expect(mocks.prisma.lesson.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "lesson_2" },
+      data: { sectionId: "section_2", position: 0 },
+    });
+    expect(mocks.prisma.lesson.update).toHaveBeenNthCalledWith(3, {
+      where: { id: "lesson_3" },
+      data: { sectionId: "section_2", position: 1 },
+    });
   });
 });

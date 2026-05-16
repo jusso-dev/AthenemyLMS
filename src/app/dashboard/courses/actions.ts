@@ -96,6 +96,34 @@ export async function createLessonFormAction(
   );
 }
 
+export async function moveSectionFormAction(
+  courseId: string,
+  sectionId: string,
+  direction: "up" | "down",
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _formData;
+  return runAction(
+    () => moveSectionAction(courseId, sectionId, direction),
+    "Section order saved.",
+  );
+}
+
+export async function moveLessonFormAction(
+  courseId: string,
+  lessonId: string,
+  direction: "up" | "down",
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _formData;
+  return runAction(
+    () => moveLessonAction(courseId, lessonId, direction),
+    "Lesson order saved.",
+  );
+}
+
 export async function updateLessonContentFormAction(
   courseId: string,
   lessonId: string,
@@ -325,6 +353,124 @@ export async function createLessonAction(
   });
 
   revalidatePath(`/dashboard/courses/${section.courseId}/curriculum`);
+}
+
+export async function moveSectionAction(
+  courseId: string,
+  sectionId: string,
+  direction: "up" | "down",
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: {
+      sections: { orderBy: { position: "asc" } },
+    },
+  });
+  if (!course || !canManageCourse(user, course)) {
+    throw new Error("You do not have permission to manage this course.");
+  }
+
+  const currentIndex = course.sections.findIndex(
+    (section) => section.id === sectionId,
+  );
+  if (currentIndex === -1) throw new Error("Section not found.");
+
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (targetIndex < 0 || targetIndex >= course.sections.length) return;
+
+  const reordered = [...course.sections];
+  const [section] = reordered.splice(currentIndex, 1);
+  reordered.splice(targetIndex, 0, section);
+
+  await prisma.$transaction(
+    reordered.map((item, position) =>
+      prisma.courseSection.update({
+        where: { id: item.id },
+        data: { position },
+      }),
+    ),
+  );
+
+  revalidatePath(`/dashboard/courses/${courseId}/curriculum`);
+  revalidatePath(`/dashboard/learn/${courseId}`);
+}
+
+export async function moveLessonAction(
+  courseId: string,
+  lessonId: string,
+  direction: "up" | "down",
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    include: { section: { include: { course: true } } },
+  });
+  if (!lesson || lesson.section.courseId !== courseId) {
+    throw new Error("Lesson not found.");
+  }
+  if (!canManageCourse(user, lesson.section.course)) {
+    throw new Error("You do not have permission to manage this course.");
+  }
+
+  const sections = await prisma.courseSection.findMany({
+    where: { courseId },
+    orderBy: { position: "asc" },
+    include: { lessons: { orderBy: { position: "asc" } } },
+  });
+  const structure = sections.map((section) => ({
+    id: section.id,
+    lessonIds: section.lessons.map((item) => item.id),
+  }));
+  const sectionIndex = structure.findIndex((section) =>
+    section.lessonIds.includes(lessonId),
+  );
+  if (sectionIndex === -1) throw new Error("Lesson not found.");
+
+  const currentLessons = structure[sectionIndex].lessonIds;
+  const lessonIndex = currentLessons.indexOf(lessonId);
+
+  if (direction === "up") {
+    if (lessonIndex > 0) {
+      currentLessons.splice(lessonIndex, 1);
+      currentLessons.splice(lessonIndex - 1, 0, lessonId);
+    } else if (sectionIndex > 0) {
+      currentLessons.splice(lessonIndex, 1);
+      structure[sectionIndex - 1].lessonIds.push(lessonId);
+    } else {
+      return;
+    }
+  }
+
+  if (direction === "down") {
+    if (lessonIndex < currentLessons.length - 1) {
+      currentLessons.splice(lessonIndex, 1);
+      currentLessons.splice(lessonIndex + 1, 0, lessonId);
+    } else if (sectionIndex < structure.length - 1) {
+      currentLessons.splice(lessonIndex, 1);
+      structure[sectionIndex + 1].lessonIds.unshift(lessonId);
+    } else {
+      return;
+    }
+  }
+
+  await prisma.$transaction(
+    structure.flatMap((section) =>
+      section.lessonIds.map((id, position) =>
+        prisma.lesson.update({
+          where: { id },
+          data: { sectionId: section.id, position },
+        }),
+      ),
+    ),
+  );
+
+  revalidatePath(`/dashboard/courses/${courseId}/curriculum`);
+  revalidatePath(`/dashboard/learn/${courseId}`);
 }
 
 export async function updateLessonContentAction(

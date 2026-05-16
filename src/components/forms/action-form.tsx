@@ -16,12 +16,14 @@ export function ActionForm({
   children,
   className,
   initialMessage,
+  inlineMessage = true,
   toast = true,
 }: {
   action: StatefulAction;
   children: React.ReactNode;
   className?: string;
   initialMessage?: string | null;
+  inlineMessage?: boolean;
   toast?: boolean;
 }) {
   const [state, formAction] = useActionState(action, {
@@ -33,7 +35,7 @@ export function ActionForm({
   return (
     <>
       <form action={formAction} className={className}>
-        {hasMessage ? <ActionMessage state={state} /> : null}
+        {inlineMessage && hasMessage ? <ActionMessage state={state} /> : null}
         {children}
       </form>
       {toast && hasMessage ? <ActionToast state={state} /> : null}
