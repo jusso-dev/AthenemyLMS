@@ -163,10 +163,20 @@ export async function getEditableCourse(
 
 export async function getMyCourses(user: AppUser | null) {
   if (!databaseIsConfigured()) {
-    return { mode: "fallback" as DashboardMode, courses: [] };
+    return {
+      mode: "fallback" as DashboardMode,
+      courses: [],
+      summary: emptyLearnerSummary(),
+    };
   }
 
-  if (!user) return { mode: "permission" as DashboardMode, courses: [] };
+  if (!user) {
+    return {
+      mode: "permission" as DashboardMode,
+      courses: [],
+      summary: emptyLearnerSummary(),
+    };
+  }
 
   try {
     const enrollments = await prisma.enrollment.findMany({
@@ -174,13 +184,128 @@ export async function getMyCourses(user: AppUser | null) {
       orderBy: { updatedAt: "desc" },
       include: { course: { include: courseInclude } },
     });
+    const courseIds = enrollments.map((enrollment) => enrollment.courseId);
+    const lessonIds = enrollments.flatMap((enrollment) =>
+      enrollment.course.sections.flatMap((section) =>
+        section.lessons.map((lesson) => lesson.id),
+      ),
+    );
+    const [progress, requiredAssessments, submissions, certificates] =
+      courseIds.length
+        ? await Promise.all([
+            lessonIds.length
+              ? prisma.lessonProgress.findMany({
+                  where: {
+                    userId: user.id,
+                    lessonId: { in: lessonIds },
+                    completedAt: { not: null },
+                  },
+                  select: { lessonId: true },
+                })
+              : [],
+            prisma.assessment.findMany({
+              where: { courseId: { in: courseIds }, requiredForCompletion: true },
+              select: { id: true, courseId: true, title: true },
+            }),
+            prisma.assessmentSubmission.findMany({
+              where: {
+                userId: user.id,
+                passed: true,
+                assessment: { courseId: { in: courseIds } },
+              },
+              select: { assessmentId: true },
+            }),
+            prisma.certificate.findMany({
+              where: { userId: user.id, courseId: { in: courseIds } },
+              select: { courseId: true, certificateNumber: true },
+            }),
+          ])
+        : [[], [], [], []];
+
+    const completedLessonIds = new Set(progress.map((item) => item.lessonId));
+    const passedAssessmentIds = new Set(
+      submissions.map((submission) => submission.assessmentId),
+    );
+    const certificateByCourseId = new Map(
+      certificates.map((certificate) => [
+        certificate.courseId,
+        certificate.certificateNumber,
+      ]),
+    );
+    const requiredAssessmentsByCourseId = new Map<
+      string,
+      typeof requiredAssessments
+    >();
+    for (const assessment of requiredAssessments) {
+      const courseAssessments =
+        requiredAssessmentsByCourseId.get(assessment.courseId) ?? [];
+      courseAssessments.push(assessment);
+      requiredAssessmentsByCourseId.set(assessment.courseId, courseAssessments);
+    }
+
+    const courses = enrollments.map((enrollment) => {
+      const lessons = enrollment.course.sections.flatMap(
+        (section) => section.lessons,
+      );
+      const completedLessons = lessons.filter((lesson) =>
+        completedLessonIds.has(lesson.id),
+      );
+      const required = requiredAssessmentsByCourseId.get(enrollment.courseId) ?? [];
+      const completedRequired = required.filter((assessment) =>
+        passedAssessmentIds.has(assessment.id),
+      );
+      const nextLesson =
+        lessons.find((lesson) => !completedLessonIds.has(lesson.id)) ??
+        lessons[0] ??
+        null;
+
+      return {
+        enrollmentStatus: enrollment.status,
+        enrolledAt: enrollment.createdAt,
+        course: enrollment.course,
+        progressPercent: lessons.length
+          ? Math.round((completedLessons.length / lessons.length) * 100)
+          : 0,
+        completedLessons: completedLessons.length,
+        totalLessons: lessons.length,
+        nextLesson,
+        requiredAssessments: required.length,
+        completedRequiredAssessments: completedRequired.length,
+        certificateNumber: certificateByCourseId.get(enrollment.courseId) ?? null,
+      };
+    });
 
     return {
       mode: "database" as DashboardMode,
-      courses: enrollments.map((enrollment) => enrollment.course),
+      courses,
+      summary: {
+        activeCourses: courses.filter(
+          (item) => item.enrollmentStatus === "ACTIVE",
+        ).length,
+        completedCourses: courses.filter(
+          (item) =>
+            item.enrollmentStatus === "COMPLETED" ||
+            item.progressPercent === 100,
+        ).length,
+        requiredWork: courses.reduce(
+          (total, item) =>
+            total +
+            Math.max(
+              0,
+              item.requiredAssessments - item.completedRequiredAssessments,
+            ),
+          0,
+        ),
+        certificatesEarned: courses.filter((item) => item.certificateNumber)
+          .length,
+      },
     };
   } catch {
-    return { mode: "fallback" as DashboardMode, courses: [] };
+    return {
+      mode: "fallback" as DashboardMode,
+      courses: [],
+      summary: emptyLearnerSummary(),
+    };
   }
 }
 
@@ -357,6 +482,15 @@ function emptyAdminStats() {
     { label: "Enrollments", value: "0" },
     { label: "Payments", value: formatPrice(0) },
   ];
+}
+
+function emptyLearnerSummary() {
+  return {
+    activeCourses: 0,
+    completedCourses: 0,
+    requiredWork: 0,
+    certificatesEarned: 0,
+  };
 }
 
 function scopeCoursesToUser(user: AppUser | null) {
