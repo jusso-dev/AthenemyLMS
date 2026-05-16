@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
 import type { AppUser } from "@/lib/auth";
 import { canManageOrganization } from "@/lib/organizations";
+import { normalizeAssetOption } from "@/lib/assets";
 
 export type PortalLink = {
   label: string;
@@ -103,7 +104,7 @@ export type PortalWithPages = Prisma.OrganizationPortalGetPayload<{
 
 export async function getPortalBuilderData(user: AppUser | null) {
   if (missingEnv(["DATABASE_URL"]).length > 0 || !user) {
-    return { organization: null, portal: null, courses: [] };
+    return { organization: null, portal: null, courses: [], assets: [] };
   }
 
   const memberships = await prisma.organizationMembership.findMany({
@@ -114,9 +115,11 @@ export async function getPortalBuilderData(user: AppUser | null) {
   const membership = memberships.find((item) =>
     canManageOrganization(user, item),
   );
-  if (!membership) return { organization: null, portal: null, courses: [] };
+  if (!membership) {
+    return { organization: null, portal: null, courses: [], assets: [] };
+  }
 
-  const [portal, courses] = await Promise.all([
+  const [portal, courses, assets] = await Promise.all([
     ensurePortalForOrganization(membership.organizationId),
     prisma.course.findMany({
       where: portalPublishedCourseWhere(membership.organizationId),
@@ -134,9 +137,28 @@ export async function getPortalBuilderData(user: AppUser | null) {
         _count: { select: { sections: true } },
       },
     }),
+    prisma.organizationAsset.findMany({
+      where: { organizationId: membership.organizationId, kind: "IMAGE" },
+      orderBy: { createdAt: "desc" },
+      take: 48,
+      select: {
+        id: true,
+        url: true,
+        filename: true,
+        altText: true,
+        caption: true,
+        width: true,
+        height: true,
+      },
+    }),
   ]);
 
-  return { organization: membership.organization, portal, courses };
+  return {
+    organization: membership.organization,
+    portal,
+    courses,
+    assets: assets.map(normalizeAssetOption),
+  };
 }
 
 export async function ensurePortalForOrganization(organizationId: string) {

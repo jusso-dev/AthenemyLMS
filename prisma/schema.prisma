@@ -95,6 +95,12 @@ enum PortalBlockType {
   COURSE_COLLECTION
 }
 
+enum OrganizationAssetKind {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
 model User {
   id                      String                   @id @default(cuid())
   clerkId                 String                   @unique
@@ -115,6 +121,7 @@ model User {
   certificates            Certificate[]
   organizationMemberships OrganizationMembership[]
   sentInvitations         OrganizationInvitation[] @relation("InvitationInviter")
+  uploadedAssets          OrganizationAsset[]      @relation("AssetUploader")
 
   @@index([role])
 }
@@ -180,6 +187,32 @@ model Organization {
   invitations  OrganizationInvitation[]
   courses      Course[]
   portal       OrganizationPortal?
+  assets       OrganizationAsset[]
+}
+
+model OrganizationAsset {
+  id             String                @id @default(cuid())
+  organizationId String
+  uploadedById   String
+  kind           OrganizationAssetKind @default(IMAGE)
+  storageKey     String
+  url            String
+  filename       String
+  mimeType       String
+  sizeBytes      Int?
+  width          Int?
+  height         Int?
+  altText        String?
+  caption        String?
+  tags           String[]              @default([])
+  usageNotes     String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy     User                  @relation("AssetUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, kind, createdAt])
+  @@index([uploadedById, createdAt])
 }
 
 model OrganizationMembership {

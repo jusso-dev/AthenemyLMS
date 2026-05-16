@@ -23,6 +23,11 @@ import {
 import { PortalBlocks, PortalShell } from "@/components/portal/portal-renderer";
 import { PortalStudio } from "@/components/portal/portal-studio";
 import {
+  GalleryLibraryField,
+  MediaLibraryField,
+  type PortalAssetOption,
+} from "@/components/portal/media-library-field";
+import {
   addPortalBlockFormAction,
   applyPortalTemplateFormAction,
   movePortalBlockFormAction,
@@ -41,7 +46,6 @@ import {
   editablePortalBlockTypes,
   getPortalBuilderData,
   getPortalPage,
-  imagesToTextarea,
   linksToTextarea,
   portalBlockLabels,
   portalTemplatePresets,
@@ -51,7 +55,8 @@ import type { Prisma, PortalBlockType } from "@prisma/client";
 export default async function DashboardSitePage() {
   const hasDatabase = databaseIsConfigured();
   const user = await getCurrentAppUser();
-  const { organization, portal, courses } = await getPortalBuilderData(user);
+  const { organization, portal, courses, assets } =
+    await getPortalBuilderData(user);
   const homePage = getPortalPage(portal, "HOME");
   const theme = portal ? draftTheme(portal) : null;
   const studioBlocks =
@@ -294,6 +299,8 @@ export default async function DashboardSitePage() {
                   block={block}
                   index={index}
                   total={homePage.blocks.length}
+                  organizationId={organization.id}
+                  assets={assets}
                 />
               ),
             }))}
@@ -357,6 +364,8 @@ function BlockEditor({
   block,
   index,
   total,
+  organizationId,
+  assets,
 }: {
   block: {
     id: string;
@@ -365,6 +374,8 @@ function BlockEditor({
   };
   index: number;
   total: number;
+  organizationId: string;
+  assets: PortalAssetOption[];
 }) {
   const config = blockConfig(block);
   const isImageBlock = block.type === "IMAGE" || block.type === "IMAGE_TEXT";
@@ -428,29 +439,20 @@ function BlockEditor({
                 Image
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Paste a public image URL, such as an image hosted on your site,
-                CDN, or storage bucket. Uploads will move into the media library
-                when that is connected.
+                Upload an image, reuse one from this organisation, or paste a
+                public URL as a fallback.
               </p>
             </div>
-            <LabeledInput
-              label="Image URL"
-              name="imageUrl"
-              defaultValue={config.imageUrl ?? ""}
-              placeholder="https://..."
+            <MediaLibraryField
+              organizationId={organizationId}
+              assets={assets}
+              imageUrlName="imageUrl"
+              imageAltName="imageAlt"
+              imageCaptionName="imageCaption"
+              defaultUrl={config.imageUrl ?? ""}
+              defaultAlt={config.imageAlt ?? ""}
+              defaultCaption={config.imageCaption ?? ""}
             />
-            <div className="grid gap-3 md:grid-cols-2">
-              <LabeledInput
-                label="Alt text"
-                name="imageAlt"
-                defaultValue={config.imageAlt ?? ""}
-              />
-              <LabeledInput
-                label="Caption"
-                name="imageCaption"
-                defaultValue={config.imageCaption ?? ""}
-              />
-            </div>
             <label className="grid gap-2 text-sm font-medium">
               Layout
               <select
@@ -473,15 +475,14 @@ function BlockEditor({
                 Gallery images
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Add one public image URL per line. Captions are optional.
+                Add, remove, reorder, caption, and describe gallery images.
               </p>
             </div>
-            <LabeledTextarea
-              label="Images"
+            <GalleryLibraryField
+              organizationId={organizationId}
+              assets={assets}
               name="images"
-              defaultValue={imagesToTextarea(config.images)}
-              rows={6}
-              hint="One per line: Image URL|Alt text|Caption"
+              defaultImages={config.images ?? []}
             />
           </div>
         ) : null}
