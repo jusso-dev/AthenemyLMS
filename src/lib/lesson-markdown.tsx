@@ -1,4 +1,5 @@
 import * as React from "react";
+import { cn } from "@/lib/utils";
 
 type ListBlock = {
   type: "list";
@@ -122,13 +123,13 @@ export function LessonMarkdown({ content }: { content: string }) {
   }
 
   return (
-    <div className="space-y-4 text-sm leading-7">
+    <div className="space-y-5 text-[15px] leading-7 text-foreground">
       {renderBlocks.map((block, index) => {
         if (block.type === "heading") {
           const className =
             block.level === 2
-              ? "text-xl font-semibold text-foreground"
-              : "text-lg font-semibold text-foreground";
+              ? "max-w-3xl pt-2 text-2xl font-semibold leading-tight text-foreground first:pt-0"
+              : "max-w-3xl pt-1 text-lg font-semibold leading-snug text-foreground";
           return block.level === 2 ? (
             <h2 key={index} className={className}>
               {block.text}
@@ -144,7 +145,7 @@ export function LessonMarkdown({ content }: { content: string }) {
           return (
             <blockquote
               key={index}
-              className="border-l-2 border-primary pl-4 text-muted-foreground"
+              className="max-w-3xl rounded-md border bg-muted/30 px-4 py-3 text-foreground/80"
             >
               {block.text}
             </blockquote>
@@ -153,9 +154,18 @@ export function LessonMarkdown({ content }: { content: string }) {
 
         if (block.type === "list") {
           return (
-            <ul key={index} className="list-disc space-y-1 pl-5 text-muted-foreground">
+            <ul
+              key={index}
+              className="max-w-3xl space-y-2 rounded-md border bg-muted/25 p-4 text-foreground/85"
+            >
               {block.items.map((item) => (
-                <li key={item}>{item}</li>
+                <li key={item} className="grid grid-cols-[0.875rem_1fr] gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="mt-[0.7em] h-1.5 w-1.5 rounded-full bg-primary/70"
+                  />
+                  <span>{item}</span>
+                </li>
               ))}
             </ul>
           );
@@ -183,7 +193,7 @@ export function LessonMarkdown({ content }: { content: string }) {
         }
 
         return (
-          <p key={index} className="text-muted-foreground">
+          <p key={index} className="max-w-3xl text-pretty text-foreground/80">
             {block.text}
           </p>
         );
@@ -261,15 +271,18 @@ function LessonImage({
 }) {
   const aspectRatio =
     image.width && image.height ? `${image.width} / ${image.height}` : undefined;
+  const figureStyle: React.CSSProperties | undefined =
+    aspectRatio && !grouped ? { aspectRatio } : undefined;
 
   return (
     <figure
-      className={
+      className={cn(
+        "border border-[oklch(0.86_0.012_95)] bg-[oklch(0.985_0.006_95)] shadow-sm dark:border-[oklch(0.58_0.014_95)] dark:bg-[oklch(0.93_0.008_95)]",
         grouped
-          ? "flex min-h-40 items-center justify-center rounded-md bg-background p-2"
-          : "overflow-hidden rounded-md border bg-muted/20"
-      }
-      style={aspectRatio && !grouped ? { aspectRatio } : undefined}
+          ? "flex min-h-40 items-center justify-center rounded-md p-3"
+          : "overflow-hidden rounded-lg p-4 sm:p-5",
+      )}
+      style={figureStyle}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -278,7 +291,7 @@ function LessonImage({
         className={
           grouped
             ? "max-h-56 max-w-full object-contain"
-            : "max-h-[680px] w-full object-contain"
+            : "mx-auto max-h-[680px] w-full object-contain"
         }
       />
     </figure>

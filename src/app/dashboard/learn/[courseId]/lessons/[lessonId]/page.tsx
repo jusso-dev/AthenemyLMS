@@ -38,6 +38,9 @@ export default async function LessonPlayerPage({
   const completedIds: string[] = completedLessonIds;
   const lessons = course?.sections.flatMap((section) => section.lessons) ?? [];
   const lesson = lessons.find((item) => item.id === lessonId) ?? lessons[0];
+  const activeSection = course?.sections.find((section) =>
+    section.lessons.some((item) => item.id === lesson?.id),
+  );
   const activeLessonIndex = lesson
     ? lessons.findIndex((item) => item.id === lesson.id)
     : -1;
@@ -82,19 +85,22 @@ export default async function LessonPlayerPage({
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
-        ) : (
-          <div className="aspect-video rounded-lg border bg-[linear-gradient(135deg,var(--primary),var(--secondary))] p-8 text-primary-foreground">
-            <p className="text-sm font-medium opacity-80">Lesson player</p>
-            <h1 className="mt-4 max-w-2xl text-3xl font-semibold">
-              {lesson?.title ?? "Lesson access"}
-            </h1>
-          </div>
-        )}
+        ) : null}
         <Card>
-          <CardHeader>
-            <CardTitle>{lesson?.title ?? "Lesson notes"}</CardTitle>
+          <CardHeader className="border-b pb-5">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              {activeSection?.title ?? course?.title ?? "Course lesson"}
+            </p>
+            <CardTitle className="text-2xl leading-tight">
+              {lesson?.title ?? "Lesson notes"}
+            </CardTitle>
+            {lesson?.durationMinutes ? (
+              <p className="text-sm text-muted-foreground">
+                {lesson.durationMinutes} min lesson
+              </p>
+            ) : null}
           </CardHeader>
-          <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
+          <CardContent className="space-y-6 pt-6">
             {mode === "permission" ? (
               <p className="rounded-md border p-4">
                 Enroll in this course to access lessons.
