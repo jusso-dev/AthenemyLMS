@@ -108,6 +108,38 @@ export default async function CourseAssessmentsPage({
                   disabled={databaseMissing || !allowed}
                 />
               </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Input
+                  name="maxAttempts"
+                  type="number"
+                  min="1"
+                  max="20"
+                  placeholder="Attempt limit"
+                  disabled={databaseMissing || !allowed}
+                />
+                <Input
+                  name="timeLimitMinutes"
+                  type="number"
+                  min="1"
+                  max="600"
+                  placeholder="Time limit"
+                  disabled={databaseMissing || !allowed}
+                />
+                <label className="grid gap-2 text-sm font-medium">
+                  Feedback
+                  <select
+                    name="feedbackMode"
+                    defaultValue="IMMEDIATE"
+                    disabled={databaseMissing || !allowed}
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="IMMEDIATE">Immediate</option>
+                    <option value="AFTER_PASSING">After passing</option>
+                    <option value="AFTER_CLOSE">After close</option>
+                    <option value="HIDDEN">Hidden</option>
+                  </select>
+                </label>
+              </div>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -148,6 +180,9 @@ export default async function CourseAssessmentsPage({
                   <p className="text-sm text-muted-foreground">
                     {assessment.questions.length} question ·{" "}
                     {assessment.passingScore}% to pass
+                    {assessment.maxAttempts
+                      ? ` · ${assessment.maxAttempts} attempts`
+                      : ""}
                     {assessment.requiredForCompletion
                       ? " · completion gate"
                       : ""}

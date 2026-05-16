@@ -47,6 +47,22 @@ enum VideoProvider {
 enum AssessmentType {
   QUIZ
   ASSIGNMENT
+  SURVEY
+}
+
+enum AssessmentQuestionType {
+  MULTIPLE_CHOICE
+  MULTIPLE_SELECT
+  TRUE_FALSE
+  SHORT_ANSWER
+  LONG_ANSWER
+}
+
+enum AssessmentFeedbackMode {
+  IMMEDIATE
+  AFTER_PASSING
+  AFTER_CLOSE
+  HIDDEN
 }
 
 enum OrganizationRole {
@@ -167,6 +183,7 @@ model Course {
   payments            Payment[]
   analyticsRollups    AnalyticsRollup[]
   assessments         Assessment[]
+  questionBanks       QuestionBank[]
   certificates        Certificate[]
   lifecycleEvents     CourseLifecycleEvent[]
   externalPackages    ExternalPackage[]
@@ -192,19 +209,20 @@ model CourseLifecycleEvent {
 }
 
 model Organization {
-  id           String                   @id @default(cuid())
-  clerkOrgId   String?                  @unique
-  name         String
-  slug         String                   @unique
-  supportEmail String?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  memberships  OrganizationMembership[]
-  invitations  OrganizationInvitation[]
-  courses      Course[]
-  portal       OrganizationPortal?
-  assets       OrganizationAsset[]
-  packages     ExternalPackage[]
+  id            String                   @id @default(cuid())
+  clerkOrgId    String?                  @unique
+  name          String
+  slug          String                   @unique
+  supportEmail  String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  memberships   OrganizationMembership[]
+  invitations   OrganizationInvitation[]
+  courses       Course[]
+  portal        OrganizationPortal?
+  assets        OrganizationAsset[]
+  packages      ExternalPackage[]
+  questionBanks QuestionBank[]
 }
 
 model OrganizationAsset {
@@ -494,43 +512,102 @@ model AnalyticsRollup {
 model Assessment {
   id                    String                 @id @default(cuid())
   courseId              String
+  questionBankId        String?
   title                 String
   description           String?
   type                  AssessmentType         @default(QUIZ)
   passingScore          Int                    @default(70)
   requiredForCompletion Boolean                @default(false)
+  maxAttempts           Int?
+  timeLimitMinutes      Int?
+  feedbackMode          AssessmentFeedbackMode @default(IMMEDIATE)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   course                Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questionBank          QuestionBank?          @relation(fields: [questionBankId], references: [id], onDelete: SetNull)
   questions             AssessmentQuestion[]
   submissions           AssessmentSubmission[]
+  rubricCriteria        RubricCriterion[]
 
   @@index([courseId, requiredForCompletion])
+  @@index([questionBankId])
 }
 
 model AssessmentQuestion {
-  id           String     @id @default(cuid())
+  id           String                 @id @default(cuid())
   assessmentId String
+  type         AssessmentQuestionType @default(MULTIPLE_CHOICE)
   prompt       String
   options      Json
   correctIndex Int
-  position     Int        @default(0)
-  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  points       Int                    @default(1)
+  position     Int                    @default(0)
+  assessment   Assessment             @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 }
 
 model AssessmentSubmission {
-  id           String     @id @default(cuid())
-  assessmentId String
-  userId       String
-  answers      Json
-  score        Int
-  passed       Boolean
-  createdAt    DateTime   @default(now())
-  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String     @id @default(cuid())
+  assessmentId  String
+  userId        String
+  attemptNumber Int        @default(1)
+  answers       Json
+  score         Int
+  passed        Boolean
+  feedback      String?
+  gradedAt      DateTime?
+  createdAt     DateTime   @default(now())
+  assessment    Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, passed])
   @@index([assessmentId, userId])
+}
+
+model QuestionBank {
+  id             String                 @id @default(cuid())
+  organizationId String?
+  courseId       String?
+  title          String
+  description    String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization?          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  course         Course?                @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions      QuestionBankQuestion[]
+  assessments    Assessment[]
+
+  @@index([organizationId])
+  @@index([courseId])
+}
+
+model QuestionBankQuestion {
+  id             String                 @id @default(cuid())
+  questionBankId String
+  type           AssessmentQuestionType @default(MULTIPLE_CHOICE)
+  prompt         String
+  options        Json
+  correctIndex   Int?
+  points         Int                    @default(1)
+  tags           String[]               @default([])
+  explanation    String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  questionBank   QuestionBank           @relation(fields: [questionBankId], references: [id], onDelete: Cascade)
+
+  @@index([questionBankId, type])
+}
+
+model RubricCriterion {
+  id           String     @id @default(cuid())
+  assessmentId String
+  title        String
+  description  String?
+  points       Int        @default(1)
+  levels       Json?
+  position     Int        @default(0)
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, position])
 }
 
 model Certificate {
