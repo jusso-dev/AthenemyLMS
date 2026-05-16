@@ -9,7 +9,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_placeholder CLERK_SECRET_KEY=sk_test_placeholder DATABASE_URL= DIRECT_URL= npx next dev -p 3100",
+      "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY= CLERK_SECRET_KEY= DATABASE_URL= DIRECT_URL= npx next dev -p 3100",
     url: "http://localhost:3100",
     reuseExistingServer: false,
   },
@@ -17,6 +17,10 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 5"] },
     },
   ],
 });
