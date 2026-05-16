@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { LibraryBig, Plus, Search } from "lucide-react";
+import { FileUp, LibraryBig, Plus, Search } from "lucide-react";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
+import { importPresentationCourseFormAction } from "@/app/dashboard/courses/actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +52,54 @@ export default async function ManageCoursesPage({
           className="pl-9"
         />
       </form>
+      {mode !== "permission" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Build from slides</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ActionForm
+              action={importPresentationCourseFormAction}
+              className="grid gap-4"
+            >
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
+                <label className="grid gap-2 text-sm">
+                  <span className="font-medium">PowerPoint file</span>
+                  <Input
+                    name="presentationFile"
+                    type="file"
+                    accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    disabled={mode !== "database"}
+                  />
+                </label>
+                <label className="grid gap-2 text-sm">
+                  <span className="font-medium">Google Slides URL</span>
+                  <Input
+                    name="googleSlidesUrl"
+                    type="url"
+                    placeholder="https://docs.google.com/presentation/d/..."
+                    disabled={mode !== "database"}
+                  />
+                </label>
+                <div className="flex items-end">
+                  <PendingSubmitButton
+                    disabled={mode !== "database"}
+                    pendingLabel="Importing..."
+                  >
+                    <FileUp className="h-4 w-4" />
+                    Import slides
+                  </PendingSubmitButton>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Creates a draft course with one lesson per slide. Embedded
+                images under the import limit are added to lesson notes. Private
+                Google decks need sharing/export access.
+              </p>
+            </ActionForm>
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Course list</CardTitle>

@@ -31,11 +31,18 @@ describe("lesson editor", () => {
 
   it("parses supported Markdown blocks for previews", () => {
     expect(
-      parseLessonMarkdown("## Heading\n\n> Note\n\n- One\n- Two\n\nParagraph"),
+      parseLessonMarkdown(
+        "## Heading\n\n> Note\n\n- One\n- Two\n\n![Diagram](data:image/png;base64,abc)\n\nParagraph",
+      ),
     ).toEqual([
       { type: "heading", level: 2, text: "Heading" },
       { type: "quote", text: "Note" },
       { type: "list", items: ["One", "Two"] },
+      {
+        type: "image",
+        alt: "Diagram",
+        src: "data:image/png;base64,abc",
+      },
       { type: "paragraph", text: "Paragraph" },
     ]);
   });

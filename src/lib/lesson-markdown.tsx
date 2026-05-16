@@ -11,7 +11,13 @@ type TextBlock = {
   level?: 2 | 3;
 };
 
-type Block = ListBlock | TextBlock;
+type ImageBlock = {
+  type: "image";
+  alt: string;
+  src: string;
+};
+
+type Block = ListBlock | TextBlock | ImageBlock;
 
 export function parseLessonMarkdown(markdown: string) {
   const blocks: Block[] = [];
@@ -59,6 +65,18 @@ export function parseLessonMarkdown(markdown: string) {
       flushParagraph();
       flushList();
       blocks.push({ type: "quote", text: trimmed.slice(2) });
+      continue;
+    }
+
+    const imageMatch = trimmed.match(/^!\[(.*)]\((.*)\)$/);
+    if (imageMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({
+        type: "image",
+        alt: imageMatch[1] || "Lesson image",
+        src: imageMatch[2],
+      });
       continue;
     }
 
@@ -125,6 +143,18 @@ export function LessonMarkdown({ content }: { content: string }) {
                 <li key={item}>{item}</li>
               ))}
             </ul>
+          );
+        }
+
+        if (block.type === "image") {
+          return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={index}
+              src={block.src}
+              alt={block.alt}
+              className="max-h-[520px] rounded-md border object-contain"
+            />
           );
         }
 

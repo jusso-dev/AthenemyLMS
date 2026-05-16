@@ -21,6 +21,10 @@ import { sendCoursePublishedEmail } from "@/lib/email";
 import { parseQuizOptions, scoreQuiz } from "@/lib/assessments";
 import { slugify } from "@/lib/utils";
 import {
+  buildPresentationCourseDraft,
+  fetchGoogleSlidesAsPptx,
+} from "@/lib/presentation-import";
+import {
   actionError,
   actionSuccess,
   formatActionError,
@@ -62,6 +66,24 @@ export async function createCourseFormAction(
 
   revalidatePath("/dashboard/courses");
   redirect(`/dashboard/courses/${courseId}/edit`);
+}
+
+export async function importPresentationCourseFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+): Promise<ActionFormState> {
+  let courseId: string;
+
+  try {
+    assertDatabaseConfigured();
+    const course = await importPresentationCourse(formData);
+    courseId = course.id;
+  } catch (error) {
+    return actionError(error);
+  }
+
+  revalidatePath("/dashboard/courses");
+  redirect(`/dashboard/courses/${courseId}/curriculum`);
 }
 
 export async function updateCourseFormAction(
@@ -260,6 +282,62 @@ async function createCourse(formData: FormData) {
   }
 
   return course;
+}
+
+async function importPresentationCourse(formData: FormData) {
+  const user = await requireAppUser();
+  if (!hasRole(user.role, "INSTRUCTOR")) {
+    throw new Error("Instructor or admin role required.");
+  }
+
+  const file = formData.get("presentationFile");
+  const googleSlidesUrl = String(formData.get("googleSlidesUrl") ?? "").trim();
+  let data: ArrayBuffer;
+  let fileName: string;
+
+  if (file instanceof File && file.size > 0) {
+    if (!file.name.toLowerCase().endsWith(".pptx")) {
+      throw new Error("Upload a PowerPoint .pptx file.");
+    }
+    data = await file.arrayBuffer();
+    fileName = file.name;
+  } else if (googleSlidesUrl) {
+    data = await fetchGoogleSlidesAsPptx(googleSlidesUrl);
+    fileName = "Google Slides presentation";
+  } else {
+    throw new Error("Upload a .pptx file or paste a Google Slides URL.");
+  }
+
+  const draft = await buildPresentationCourseDraft({ data, fileName });
+
+  return prisma.course.create({
+    data: {
+      title: draft.title,
+      slug: await uniqueCourseSlug(draft.slug),
+      subtitle: draft.subtitle,
+      description: draft.description,
+      status: "DRAFT",
+      priceCents: 0,
+      durationMinutes: draft.durationMinutes,
+      instructorId: user.id,
+      sections: {
+        create: {
+          title: "Imported slides",
+          position: 0,
+          lessons: {
+            create: draft.lessons.map((lesson) => ({
+              title: lesson.title,
+              slug: lesson.slug,
+              content: lesson.content,
+              durationMinutes: 5,
+              position: lesson.position,
+              preview: false,
+            })),
+          },
+        },
+      },
+    },
+  });
 }
 
 export async function issueCertificateAction(courseId: string) {
@@ -839,6 +917,15 @@ function assertDatabaseConfigured() {
       "Supabase is not configured. Add DATABASE_URL to .env.local.",
     );
   }
+}
+
+async function uniqueCourseSlug(baseSlug: string) {
+  const normalized = slugify(baseSlug) || `imported-course-${Date.now()}`;
+  const existing = await prisma.course.findUnique({
+    where: { slug: normalized },
+  });
+  if (!existing) return normalized;
+  return `${normalized}-import-${Date.now()}`;
 }
 
 async function runAction(
