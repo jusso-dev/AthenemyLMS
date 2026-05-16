@@ -482,7 +482,7 @@ function defaultPortalPages() {
     },
     {
       type: "AFTER_LOGIN" as const,
-      slug: "home",
+      slug: "learner-home",
       title: "Learner home",
       seoTitle: "Learner home",
       seoDescription: "Resume learning and review course progress.",
