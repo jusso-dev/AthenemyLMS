@@ -58,7 +58,9 @@ export default async function AssessmentManagementPage({
       {databaseMissing ? (
         <SetupMessage
           title="Supabase setup required"
-          items={["Assessment management requires DATABASE_URL and DIRECT_URL."]}
+          items={[
+            "Assessment management requires DATABASE_URL and DIRECT_URL.",
+          ]}
         />
       ) : null}
       <PageHeader
@@ -126,6 +128,39 @@ export default async function AssessmentManagementPage({
                       defaultChecked={assessment.requiredForCompletion}
                     />
                     Require passing this assessment for completion
+                  </label>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Input
+                    aria-label="Attempt limit"
+                    name="maxAttempts"
+                    type="number"
+                    min="1"
+                    max="20"
+                    defaultValue={assessment.maxAttempts ?? ""}
+                    placeholder="Attempt limit"
+                  />
+                  <Input
+                    aria-label="Time limit"
+                    name="timeLimitMinutes"
+                    type="number"
+                    min="1"
+                    max="600"
+                    defaultValue={assessment.timeLimitMinutes ?? ""}
+                    placeholder="Minutes"
+                  />
+                  <label className="grid gap-2 text-sm font-medium">
+                    Feedback
+                    <select
+                      name="feedbackMode"
+                      defaultValue={assessment.feedbackMode}
+                      className="h-10 rounded-md border bg-background px-3 text-sm"
+                    >
+                      <option value="IMMEDIATE">Immediate</option>
+                      <option value="AFTER_PASSING">After passing</option>
+                      <option value="AFTER_CLOSE">After close</option>
+                      <option value="HIDDEN">Hidden</option>
+                    </select>
                   </label>
                 </div>
                 <PendingSubmitButton className="w-fit">

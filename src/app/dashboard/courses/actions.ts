@@ -1141,6 +1141,9 @@ export async function createAssessmentAction(
     correctIndex: formData.get("correctIndex"),
     passingScore: formData.get("passingScore"),
     requiredForCompletion: formData.get("requiredForCompletion") === "on",
+    maxAttempts: formData.get("maxAttempts") ?? "",
+    timeLimitMinutes: formData.get("timeLimitMinutes") ?? "",
+    feedbackMode: formData.get("feedbackMode") ?? "IMMEDIATE",
   });
   const options = parseQuizOptions(parsed.options);
   if (parsed.correctIndex >= options.length) {
@@ -1154,8 +1157,16 @@ export async function createAssessmentAction(
       description: parsed.description || null,
       passingScore: parsed.passingScore,
       requiredForCompletion: parsed.requiredForCompletion,
+      maxAttempts:
+        typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : null,
+      timeLimitMinutes:
+        typeof parsed.timeLimitMinutes === "number"
+          ? parsed.timeLimitMinutes
+          : null,
+      feedbackMode: parsed.feedbackMode,
       questions: {
         create: {
+          type: "MULTIPLE_CHOICE",
           prompt: parsed.prompt,
           options,
           correctIndex: parsed.correctIndex,
@@ -1192,6 +1203,9 @@ export async function updateAssessmentAction(
     description: formData.get("description") ?? "",
     passingScore: formData.get("passingScore"),
     requiredForCompletion: formData.get("requiredForCompletion") === "on",
+    maxAttempts: formData.get("maxAttempts") ?? "",
+    timeLimitMinutes: formData.get("timeLimitMinutes") ?? "",
+    feedbackMode: formData.get("feedbackMode") ?? "IMMEDIATE",
   });
 
   await prisma.assessment.update({
@@ -1201,6 +1215,13 @@ export async function updateAssessmentAction(
       description: parsed.description || null,
       passingScore: parsed.passingScore,
       requiredForCompletion: parsed.requiredForCompletion,
+      maxAttempts:
+        typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : null,
+      timeLimitMinutes:
+        typeof parsed.timeLimitMinutes === "number"
+          ? parsed.timeLimitMinutes
+          : null,
+      feedbackMode: parsed.feedbackMode,
     },
   });
 
@@ -1452,6 +1473,12 @@ export async function submitAssessmentAction(
   if (!assessment || assessment.courseId !== courseId) {
     throw new Error("Assessment not found.");
   }
+  const previousAttempts = await prisma.assessmentSubmission.count({
+    where: { assessmentId, userId: user.id },
+  });
+  if (assessment.maxAttempts && previousAttempts >= assessment.maxAttempts) {
+    throw new Error("You have used all attempts for this assessment.");
+  }
 
   const answers = Object.fromEntries(
     assessment.questions.map((question) => [
@@ -1466,6 +1493,7 @@ export async function submitAssessmentAction(
     data: {
       assessmentId,
       userId: user.id,
+      attemptNumber: previousAttempts + 1,
       answers,
       score,
       passed,

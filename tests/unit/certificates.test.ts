@@ -15,6 +15,12 @@ const mocks = vi.hoisted(() => ({
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
+    assessment: {
+      findMany: vi.fn(),
+    },
+    assessmentSubmission: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -23,6 +29,8 @@ vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
 describe("certificates", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.prisma.assessment.findMany.mockResolvedValue([]);
+    mocks.prisma.assessmentSubmission.findMany.mockResolvedValue([]);
   });
 
   it("creates stable public certificate numbers", () => {
@@ -65,6 +73,22 @@ describe("certificates", () => {
     await expect(issueCertificate("user_1", "course_1")).rejects.toThrow(
       "completed",
     );
+  });
+
+  it("requires passing completion-gated assessments before certificate issue", async () => {
+    mocks.prisma.enrollment.findUnique.mockResolvedValue({
+      status: "COMPLETED",
+      course: { certificatesEnabled: true },
+    });
+    mocks.prisma.assessment.findMany.mockResolvedValue([
+      { id: "assessment_1", title: "Final check" },
+    ]);
+    mocks.prisma.assessmentSubmission.findMany.mockResolvedValue([]);
+
+    await expect(issueCertificate("user_1", "course_1")).rejects.toThrow(
+      "Required assessments",
+    );
+    expect(mocks.prisma.certificate.upsert).not.toHaveBeenCalled();
   });
 
   it("selects only public verification fields", async () => {

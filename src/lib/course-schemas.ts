@@ -57,6 +57,23 @@ export const assessmentSchema = z.object({
   correctIndex: z.coerce.number().int().min(0).max(9),
   passingScore: z.coerce.number().int().min(1).max(100).default(70),
   requiredForCompletion: z.coerce.boolean().default(false),
+  maxAttempts: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .or(z.literal("")),
+  timeLimitMinutes: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(600)
+    .optional()
+    .or(z.literal("")),
+  feedbackMode: z
+    .enum(["IMMEDIATE", "AFTER_PASSING", "AFTER_CLOSE", "HIDDEN"])
+    .default("IMMEDIATE"),
 });
 
 export const assessmentSettingsSchema = z.object({
@@ -64,6 +81,23 @@ export const assessmentSettingsSchema = z.object({
   description: z.string().max(1000).optional().or(z.literal("")),
   passingScore: z.coerce.number().int().min(1).max(100).default(70),
   requiredForCompletion: z.coerce.boolean().default(false),
+  maxAttempts: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .or(z.literal("")),
+  timeLimitMinutes: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(600)
+    .optional()
+    .or(z.literal("")),
+  feedbackMode: z
+    .enum(["IMMEDIATE", "AFTER_PASSING", "AFTER_CLOSE", "HIDDEN"])
+    .default("IMMEDIATE"),
 });
 
 export const assessmentQuestionSchema = z.object({

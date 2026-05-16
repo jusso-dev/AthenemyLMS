@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn(),
     },
     assessmentSubmission: {
+      count: vi.fn(),
       create: vi.fn(),
       findMany: vi.fn(),
     },
@@ -56,7 +57,10 @@ describe("assessments", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(parseQuizOptions("Specific\n\nVague")).toEqual(["Specific", "Vague"]);
+    expect(parseQuizOptions("Specific\n\nVague")).toEqual([
+      "Specific",
+      "Vague",
+    ]);
   });
 
   it("scores quiz responses", () => {
@@ -115,8 +119,10 @@ describe("assessments", () => {
       id: "assessment_1",
       courseId: "course_1",
       passingScore: 70,
+      maxAttempts: null,
       questions: [{ id: "q1", correctIndex: 0 }],
     });
+    mocks.prisma.assessmentSubmission.count.mockResolvedValue(0);
     mocks.prisma.assessmentSubmission.create.mockResolvedValue({});
 
     const formData = new FormData();
@@ -128,10 +134,35 @@ describe("assessments", () => {
       data: expect.objectContaining({
         userId: "student_1",
         assessmentId: "assessment_1",
+        attemptNumber: 1,
         score: 100,
         passed: true,
       }),
     });
+  });
+
+  it("blocks submissions after the configured attempt limit", async () => {
+    mocks.requireAppUser.mockResolvedValue({
+      id: "student_1",
+      role: "STUDENT",
+      clerkId: "clerk_student",
+      email: "student@example.com",
+      name: "Student",
+      imageUrl: null,
+    });
+    mocks.prisma.assessment.findUnique.mockResolvedValue({
+      id: "assessment_1",
+      courseId: "course_1",
+      passingScore: 70,
+      maxAttempts: 1,
+      questions: [{ id: "q1", correctIndex: 0 }],
+    });
+    mocks.prisma.assessmentSubmission.count.mockResolvedValue(1);
+
+    await expect(
+      submitAssessmentAction("course_1", "assessment_1", new FormData()),
+    ).rejects.toThrow("used all attempts");
+    expect(mocks.prisma.assessmentSubmission.create).not.toHaveBeenCalled();
   });
 
   it("reports missing required gates", async () => {
