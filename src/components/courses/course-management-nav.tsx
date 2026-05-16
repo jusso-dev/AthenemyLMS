@@ -10,7 +10,7 @@ const items = [
   { key: "curriculum", label: "Curriculum", icon: ListTree },
   { key: "assessments", label: "Assessments", icon: ClipboardCheck },
   { key: "students", label: "Learners", icon: Users },
-  { key: "insights", label: "Insights", icon: BarChart3, disabled: true },
+  { key: "insights", label: "Insights", icon: BarChart3 },
 ];
 
 function hrefFor(courseId: string, key: string) {
@@ -29,18 +29,6 @@ export function CourseManagementNav({ courseId }: { courseId: string }) {
       {items.map((item) => {
         const href = hrefFor(courseId, item.key);
         const active = pathname === href || pathname.startsWith(`${href}/`);
-
-        if (item.disabled) {
-          return (
-            <span
-              key={item.key}
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground/60"
-            >
-              <item.icon className="h-4 w-4" aria-hidden="true" />
-              {item.label}
-            </span>
-          );
-        }
 
         return (
           <Link
