@@ -1,4 +1,12 @@
 import { Users } from "lucide-react";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
+import {
+  cancelCourseEnrollmentFormAction,
+  enrollCourseLearnerFormAction,
+} from "@/app/dashboard/courses/actions";
 import { CourseManagementNav } from "@/components/courses/course-management-nav";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,16 +24,57 @@ export default async function CourseStudentsPage({
 }) {
   const { courseId } = await params;
   const user = await getCurrentAppUser();
-  const { mode, students } = await getCourseStudents(user, courseId);
+  const { mode, students, availableUsers, courseTitle } =
+    await getCourseStudents(user, courseId);
 
   return (
     <div className="space-y-6">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
       <PageHeader
+        eyebrow={courseTitle}
         title="Learners"
         description="Enrollment and progress summary for this course."
       />
       <CourseManagementNav courseId={courseId} />
+      {mode === "database" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add learners</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {availableUsers.length === 0 ? (
+              <EmptyState
+                icon={Users}
+                title="No available learners"
+                description="Everyone in scope is already enrolled, or no organization members exist yet."
+              />
+            ) : (
+              <ActionForm
+                action={enrollCourseLearnerFormAction.bind(null, courseId)}
+                className="grid gap-3 sm:grid-cols-[1fr_auto]"
+              >
+                <select
+                  aria-label="Learner"
+                  name="userId"
+                  required
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Choose a learner</option>
+                  {availableUsers.map((availableUser) => (
+                    <option key={availableUser.id} value={availableUser.id}>
+                      {availableUser.name ?? availableUser.email} ·{" "}
+                      {availableUser.email}
+                    </option>
+                  ))}
+                </select>
+                <PendingSubmitButton pendingLabel="Enrolling...">
+                  Enroll learner
+                </PendingSubmitButton>
+              </ActionForm>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Enrolled learners</CardTitle>
@@ -58,9 +107,31 @@ export default async function CourseStudentsPage({
                   {student.progress}%
                 </span>
               </div>
-              <Badge variant={student.status === "Completed" ? "success" : "outline"}>
-                {student.status}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <Badge
+                  variant={student.status === "Completed" ? "success" : "outline"}
+                >
+                  {student.status}
+                </Badge>
+                {student.status !== "Cancelled" ? (
+                  <ActionForm
+                    action={cancelCourseEnrollmentFormAction.bind(
+                      null,
+                      courseId,
+                      student.userId,
+                    )}
+                    inlineMessage={false}
+                  >
+                    <PendingSubmitButton
+                      size="sm"
+                      variant="outline"
+                      pendingLabel="Cancelling..."
+                    >
+                      Cancel access
+                    </PendingSubmitButton>
+                  </ActionForm>
+                ) : null}
+              </div>
             </div>
           ))}
         </CardContent>

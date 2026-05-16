@@ -372,6 +372,8 @@ export async function getCourseStudents(
     return {
       mode: "fallback" as DashboardMode,
       students: [],
+      availableUsers: [],
+      courseTitle: null,
     };
   }
 
@@ -384,12 +386,20 @@ export async function getCourseStudents(
   });
 
   if (!course || !canManageCourse(user, course)) {
-    return { mode: "permission" as DashboardMode, students: [] };
+    return {
+      mode: "permission" as DashboardMode,
+      students: [],
+      availableUsers: [],
+      courseTitle: course?.title ?? null,
+    };
   }
 
   const lessonIds = course.sections.flatMap((section) =>
     section.lessons.map((lesson) => lesson.id),
   );
+  const activeEnrollmentUserIds = course.enrollments
+    .filter((enrollment) => ["ACTIVE", "COMPLETED"].includes(enrollment.status))
+    .map((enrollment) => enrollment.userId);
   const progress = lessonIds.length
     ? await prisma.lessonProgress.findMany({
         where: {
@@ -405,20 +415,55 @@ export async function getCourseStudents(
 
   return {
     mode: "database" as DashboardMode,
+    courseTitle: course.title,
+    availableUsers: await getAvailableEnrollmentUsers(
+      course.organizationId,
+      activeEnrollmentUserIds,
+    ),
     students: course.enrollments.map((enrollment) => {
       const completed = progress.filter(
         (item) => item.userId === enrollment.userId,
       ).length;
       return {
         name: enrollment.user.name ?? "Unnamed learner",
+        userId: enrollment.userId,
         email: enrollment.user.email,
         progress: lessonIds.length
           ? Math.round((completed / lessonIds.length) * 100)
           : 0,
-        status: enrollment.status === "COMPLETED" ? "Completed" : "Active",
+        status:
+          enrollment.status === "COMPLETED"
+            ? "Completed"
+            : enrollment.status === "CANCELLED"
+              ? "Cancelled"
+              : "Active",
       };
     }),
   };
+}
+
+async function getAvailableEnrollmentUsers(
+  organizationId: string | null,
+  enrolledUserIds: string[],
+) {
+  if (organizationId) {
+    const memberships = await prisma.organizationMembership.findMany({
+      where: {
+        organizationId,
+        userId: { notIn: enrolledUserIds },
+      },
+      include: { user: true },
+      orderBy: { createdAt: "asc" },
+      take: 50,
+    });
+    return memberships.map((membership) => membership.user);
+  }
+
+  return prisma.user.findMany({
+    where: { id: { notIn: enrolledUserIds } },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
 }
 
 export async function getAdminOverview(user: AppUser | null) {

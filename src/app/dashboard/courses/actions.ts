@@ -159,6 +159,30 @@ export async function createAssessmentFormAction(
   );
 }
 
+export async function enrollCourseLearnerFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => enrollCourseLearnerAction(courseId, formData),
+    "Learner enrolled.",
+  );
+}
+
+export async function cancelCourseEnrollmentFormAction(
+  courseId: string,
+  userId: string,
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _formData;
+  return runAction(
+    () => cancelCourseEnrollmentAction(courseId, userId),
+    "Learner access cancelled.",
+  );
+}
+
 export async function submitAssessmentFormAction(
   courseId: string,
   assessmentId: string,
@@ -598,6 +622,57 @@ export async function createAssessmentAction(
 
   revalidatePath(`/dashboard/courses/${courseId}/assessments`);
   revalidatePath(`/dashboard/learn/${courseId}`);
+}
+
+export async function enrollCourseLearnerAction(
+  courseId: string,
+  formData: FormData,
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  if (!canManageCourse(user, course)) {
+    throw new Error("You do not have permission to manage this course.");
+  }
+
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) throw new Error("Choose a learner to enroll.");
+
+  const learner = await prisma.user.findUnique({ where: { id: userId } });
+  if (!learner) throw new Error("Learner not found.");
+
+  await prisma.enrollment.upsert({
+    where: { userId_courseId: { userId, courseId } },
+    create: { userId, courseId, status: "ACTIVE" },
+    update: { status: "ACTIVE" },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/students`);
+  revalidatePath(`/dashboard/learn/${courseId}`);
+  revalidatePath("/dashboard/my-courses");
+}
+
+export async function cancelCourseEnrollmentAction(
+  courseId: string,
+  userId: string,
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  if (!canManageCourse(user, course)) {
+    throw new Error("You do not have permission to manage this course.");
+  }
+
+  await prisma.enrollment.update({
+    where: { userId_courseId: { userId, courseId } },
+    data: { status: "CANCELLED" },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/students`);
+  revalidatePath(`/dashboard/learn/${courseId}`);
+  revalidatePath("/dashboard/my-courses");
 }
 
 export async function submitAssessmentAction(
