@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  getLearnerRiskSignal,
   summarizeCourseMetrics,
   summarizePlatformStats,
+  toCsv,
 } from "@/lib/analytics";
 
 describe("analytics summaries", () => {
@@ -101,5 +103,42 @@ describe("analytics summaries", () => {
     });
     expect(totals.admin).toContainEqual({ label: "Users", value: "4" });
     expect(totals.admin).toContainEqual({ label: "Payments", value: "$98.00" });
+  });
+
+  it("flags learner risk from inactivity, low progress, and failed gates", () => {
+    const now = new Date("2026-05-16T00:00:00Z");
+
+    expect(
+      getLearnerRiskSignal({
+        progressPercent: 80,
+        enrolledAt: new Date("2026-05-01T00:00:00Z"),
+        lastActivityAt: new Date("2026-05-15T00:00:00Z"),
+        failedRequiredAssessments: 1,
+        now,
+      }).level,
+    ).toBe("high");
+
+    expect(
+      getLearnerRiskSignal({
+        progressPercent: 10,
+        enrolledAt: new Date("2026-05-01T00:00:00Z"),
+        lastActivityAt: new Date("2026-05-14T00:00:00Z"),
+        now,
+      }).label,
+    ).toBe("Low progress");
+  });
+
+  it("serializes report rows as CSV", () => {
+    expect(
+      toCsv([
+        {
+          learner: "Ada, Example",
+          email: "ada@example.com",
+          progressPercent: 100,
+        },
+      ]),
+    ).toBe(
+      'learner,email,progressPercent\n"Ada, Example",ada@example.com,100\n',
+    );
   });
 });

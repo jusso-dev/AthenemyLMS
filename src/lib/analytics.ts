@@ -52,6 +52,16 @@ type ProgressRow = {
   count: number;
 };
 
+export type LearnerRiskInput = {
+  progressPercent: number;
+  enrolledAt: Date;
+  lastActivityAt?: Date | null;
+  failedRequiredAssessments?: number;
+  now?: Date;
+};
+
+export type ReportCsvRow = Record<string, string | number | null | undefined>;
+
 export function analyticsFallbackNotice() {
   return {
     title: "Supabase setup required",
@@ -153,6 +163,56 @@ export function summarizePlatformStats(
       { label: "Payments", value: formatPrice(revenueCents) },
     ],
   };
+}
+
+export function getLearnerRiskSignal(input: LearnerRiskInput) {
+  const now = input.now ?? new Date();
+  const lastActivityAt = input.lastActivityAt ?? input.enrolledAt;
+  const inactiveDays = daysBetween(lastActivityAt, now);
+  const enrollmentAgeDays = daysBetween(input.enrolledAt, now);
+  const failedRequiredAssessments = input.failedRequiredAssessments ?? 0;
+
+  if (failedRequiredAssessments > 0) {
+    return {
+      level: "high" as const,
+      label: "Assessment risk",
+      reason: "Failed a required assessment.",
+    };
+  }
+
+  if (inactiveDays >= 14 && input.progressPercent < 100) {
+    return {
+      level: "high" as const,
+      label: "Inactive",
+      reason: `No activity for ${inactiveDays} days.`,
+    };
+  }
+
+  if (enrollmentAgeDays >= 7 && input.progressPercent < 25) {
+    return {
+      level: "medium" as const,
+      label: "Low progress",
+      reason: "Progress is low for the enrollment age.",
+    };
+  }
+
+  return {
+    level: "low" as const,
+    label: "On track",
+    reason: "No risk signals detected.",
+  };
+}
+
+export function toCsv(rows: ReportCsvRow[]) {
+  if (rows.length === 0) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) =>
+      headers.map((header) => csvCell(row[header])).join(","),
+    ),
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
 export async function getInstructorAnalytics(user: AppUser | null) {
@@ -319,4 +379,17 @@ function countEnrollments(
       (row) => row.courseId === courseId && row.status === status,
     )?.count ?? 0
   );
+}
+
+function daysBetween(start: Date, end: Date) {
+  return Math.max(
+    0,
+    Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+  );
+}
+
+function csvCell(value: string | number | null | undefined) {
+  const stringValue = value == null ? "" : String(value);
+  if (!/[",\n]/.test(stringValue)) return stringValue;
+  return `"${stringValue.replaceAll('"', '""')}"`;
 }
