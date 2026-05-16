@@ -63,6 +63,36 @@ enum InvitationStatus {
   EXPIRED
 }
 
+enum PortalStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum PortalPageType {
+  HOME
+  CATALOG
+  COURSE_TEMPLATE
+  AFTER_LOGIN
+  CUSTOM
+}
+
+enum PortalBlockType {
+  HERO
+  FEATURED_COURSES
+  COURSE_CATALOG
+  RICH_TEXT
+  IMAGE_TEXT
+  INSTRUCTOR_PROFILE
+  TESTIMONIALS
+  FAQ
+  CTA
+  PRICING
+  LOGIN_SIGNUP
+  RESUME_LEARNING
+  REQUIRED_WORK
+  COURSE_COLLECTION
+}
+
 model User {
   id                      String                   @id @default(cuid())
   clerkId                 String                   @unique
@@ -129,6 +159,7 @@ model Organization {
   memberships  OrganizationMembership[]
   invitations  OrganizationInvitation[]
   courses      Course[]
+  portal       OrganizationPortal?
 }
 
 model OrganizationMembership {
@@ -160,6 +191,67 @@ model OrganizationInvitation {
 
   @@index([organizationId, status])
   @@index([email, status])
+}
+
+model OrganizationPortal {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  status         PortalStatus @default(DRAFT)
+  logoUrl        String?
+  primaryColor   String       @default("#1e3a8a")
+  accentColor    String       @default("#0f766e")
+  fontFamily     String       @default("sans")
+  buttonStyle    String       @default("rounded")
+  navLinks       Json?
+  footerLinks    Json?
+  publishedTheme Json?
+  customDomain   String?
+  publishedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pages          PortalPage[]
+
+  @@index([status])
+}
+
+model PortalPage {
+  id                      String             @id @default(cuid())
+  portalId                String
+  type                    PortalPageType
+  slug                    String
+  title                   String
+  seoTitle                String?
+  seoDescription          String?
+  status                  PortalStatus       @default(DRAFT)
+  publishedTitle          String?
+  publishedSeoTitle       String?
+  publishedSeoDescription String?
+  publishedAt             DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  portal                  OrganizationPortal @relation(fields: [portalId], references: [id], onDelete: Cascade)
+  blocks                  PortalBlock[]
+
+  @@unique([portalId, type])
+  @@unique([portalId, slug])
+  @@index([type, status])
+}
+
+model PortalBlock {
+  id              String          @id @default(cuid())
+  pageId          String
+  type            PortalBlockType
+  position        Int             @default(0)
+  config          Json
+  publishedConfig Json?
+  publishedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  page            PortalPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, position])
+  @@index([type])
 }
 
 model CourseSection {

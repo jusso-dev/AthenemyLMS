@@ -49,6 +49,9 @@ export async function createOrganizationForUser(input: {
         memberships: {
           create: { userId: input.userId, role: "OWNER" },
         },
+        portal: {
+          create: {},
+        },
       },
     }),
   ]);

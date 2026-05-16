@@ -17,6 +17,7 @@ type CourseCardProps = {
     instructor?: { name?: string | null } | null;
     sections?: { lessons?: unknown[] }[];
     _count?: { sections?: number };
+    href?: string;
   };
 };
 
@@ -64,7 +65,9 @@ export function CourseCard({ course }: CourseCardProps) {
           </span>
         </div>
         <Button asChild variant="outline" className="w-full">
-          <Link href={`/courses/${course.slug}`}>View course</Link>
+          <Link href={course.href ?? `/courses/${course.slug}`}>
+            View course
+          </Link>
         </Button>
       </CardContent>
     </Card>

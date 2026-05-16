@@ -6,6 +6,7 @@ import {
   CreditCard,
   GraduationCap,
   Home,
+  LayoutTemplate,
   Settings,
   ShieldCheck,
 } from "lucide-react";
@@ -16,6 +17,7 @@ const nav = [
   { href: "/dashboard", label: "Overview", icon: Home, exact: true },
   { href: "/dashboard/my-courses", label: "My courses", icon: GraduationCap },
   { href: "/dashboard/courses", label: "Manage", icon: BookOpen },
+  { href: "/dashboard/site", label: "Portal", icon: LayoutTemplate },
   { href: "/dashboard/admin", label: "Admin", icon: ShieldCheck },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },

@@ -366,11 +366,13 @@ async function createCourse(formData: FormData) {
     certificatesEnabled: formData.get("certificatesEnabled") === "on",
     thumbnailUrl: formData.get("thumbnailUrl"),
   });
+  const organizationId = await primaryOrganizationIdForUser(user.id);
 
   const course = await prisma.course.create({
     data: {
       ...parsed,
       instructorId: user.id,
+      organizationId,
       publishedAt: parsed.status === "PUBLISHED" ? new Date() : null,
     },
   });
@@ -411,6 +413,7 @@ async function importPresentationCourse(formData: FormData) {
   }
 
   const draft = await buildPresentationCourseDraft({ data, fileName });
+  const organizationId = await primaryOrganizationIdForUser(user.id);
 
   return prisma.course.create({
     data: {
@@ -422,6 +425,7 @@ async function importPresentationCourse(formData: FormData) {
       priceCents: 0,
       durationMinutes: draft.durationMinutes,
       instructorId: user.id,
+      organizationId,
       sections: {
         create: {
           title: "Imported slides",
@@ -440,6 +444,15 @@ async function importPresentationCourse(formData: FormData) {
       },
     },
   });
+}
+
+async function primaryOrganizationIdForUser(userId: string) {
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    select: { organizationId: true },
+  });
+  return membership?.organizationId ?? null;
 }
 
 export async function issueCertificateAction(courseId: string) {
