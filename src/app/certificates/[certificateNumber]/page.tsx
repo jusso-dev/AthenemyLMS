@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { Award } from "lucide-react";
+import { Award, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SetupMessage } from "@/lib/setup-message";
 import { missingEnv } from "@/lib/env";
@@ -50,6 +51,17 @@ export default async function CertificateVerificationPage({
             Verification confirms the certificate number, course, issuer, and
             issue date without exposing private learner information.
           </p>
+          {!databaseMissing ? (
+            <Button asChild className="mt-2">
+              <a
+                href={`/certificates/${certificateNumber}/pdf`}
+                download={`${certificateNumber}.pdf`}
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
+              </a>
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
     </main>

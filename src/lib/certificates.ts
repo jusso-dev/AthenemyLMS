@@ -36,6 +36,7 @@ export async function getCertificateVerification(certificateNumber: string) {
     select: {
       certificateNumber: true,
       issuedAt: true,
+      user: { select: { name: true } },
       course: {
         select: {
           title: true,

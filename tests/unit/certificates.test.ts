@@ -4,6 +4,7 @@ import {
   getCertificateVerification,
   issueCertificate,
 } from "@/lib/certificates";
+import { generateCertificatePdf } from "@/lib/certificate-pdf";
 
 const mocks = vi.hoisted(() => ({
   prisma: {
@@ -76,6 +77,7 @@ describe("certificates", () => {
       select: {
         certificateNumber: true,
         issuedAt: true,
+        user: { select: { name: true } },
         course: {
           select: {
             title: true,
@@ -84,5 +86,20 @@ describe("certificates", () => {
         },
       },
     });
+  });
+
+  it("generates a downloadable PDF certificate", async () => {
+    const pdf = await generateCertificatePdf({
+      certificateNumber: "ATH-2026-ABC",
+      issuedAt: new Date("2026-05-15T00:00:00Z"),
+      recipientName: "Ada Lovelace",
+      course: {
+        title: "Wombat Mange Carer Coordination",
+        instructor: { name: "Athenemy faculty" },
+      },
+    });
+
+    expect(Buffer.from(pdf.subarray(0, 5)).toString("utf8")).toBe("%PDF-");
+    expect(pdf.length).toBeGreaterThan(1000);
   });
 });
