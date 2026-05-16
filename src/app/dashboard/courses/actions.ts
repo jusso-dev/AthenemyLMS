@@ -27,6 +27,7 @@ import {
   fetchGoogleSlidesAsPptx,
 } from "@/lib/presentation-import";
 import { getCoursePublishReadiness } from "@/lib/course-readiness";
+import { parseScorm12Manifest } from "@/lib/scorm";
 import {
   actionError,
   actionSuccess,
@@ -367,11 +368,81 @@ export async function submitAssessmentFormAction(
   );
 }
 
+export async function uploadScormPackageFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => uploadScormPackageAction(courseId, formData),
+    "SCORM package registered.",
+  );
+}
+
 export async function updateProfileFormAction(
   _previousState: ActionFormState,
   formData: FormData,
 ) {
   return runAction(() => updateProfileAction(formData), "Profile saved.");
+}
+
+export async function uploadScormPackageAction(
+  courseId: string,
+  formData: FormData,
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: {
+      sections: { include: { lessons: { select: { id: true } } } },
+    },
+  });
+  if (!course || !canManageCourse(user, course)) {
+    throw new Error("You do not have permission to manage this course.");
+  }
+
+  const lessonId = String(formData.get("lessonId") ?? "");
+  if (lessonId) {
+    const lessonIds = new Set(
+      course.sections.flatMap((section) =>
+        section.lessons.map((lesson) => lesson.id),
+      ),
+    );
+    if (!lessonIds.has(lessonId)) {
+      throw new Error("Choose a lesson from this course.");
+    }
+  }
+
+  const file = formData.get("packageFile");
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("Upload a SCORM 1.2 .zip package.");
+  }
+  if (!file.name.toLowerCase().endsWith(".zip")) {
+    throw new Error("SCORM packages must be uploaded as .zip files.");
+  }
+
+  const manifest = await parseScorm12Manifest(await file.arrayBuffer());
+  await prisma.externalPackage.create({
+    data: {
+      organizationId: course.organizationId,
+      courseId,
+      lessonId: lessonId || null,
+      uploadedById: user.id,
+      type: "SCORM_12",
+      status: "READY",
+      title: manifest.title,
+      identifier: manifest.identifier,
+      version: manifest.version,
+      storageKey: `scorm/${courseId}/${Date.now()}-${file.name}`,
+      launchPath: manifest.launchPath,
+      manifest,
+    },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/interoperability`);
+  revalidatePath(`/dashboard/courses/${courseId}/studio`);
 }
 
 export async function markLessonCompleteFormAction(
