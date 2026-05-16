@@ -4,8 +4,12 @@ const mocks = vi.hoisted(() => {
   const prisma = {
     course: {
       create: vi.fn(),
+      delete: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+    },
+    courseLifecycleEvent: {
+      create: vi.fn(),
     },
     courseSection: {
       create: vi.fn(),
@@ -19,6 +23,7 @@ const mocks = vi.hoisted(() => {
       update: vi.fn(),
     },
     lessonProgress: {
+      count: vi.fn(),
       upsert: vi.fn(),
     },
     assessment: {
@@ -29,6 +34,9 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(),
       delete: vi.fn(),
       update: vi.fn(),
+    },
+    assessmentSubmission: {
+      count: vi.fn(),
     },
     enrollment: {
       findUnique: vi.fn(),
@@ -60,8 +68,10 @@ vi.mock("@/lib/email", () => ({
 }));
 
 import {
+  archiveCourseFormAction,
   createCourseAction,
   createCourseFormAction,
+  deleteCourseFormAction,
   createLessonAction,
   createSectionAction,
   markLessonCompleteAction,
@@ -73,6 +83,7 @@ import {
   moveLessonFormAction,
   moveSectionFormAction,
   publishCourseFormAction,
+  restoreCourseFormAction,
   updateAssessmentQuestionFormAction,
   updateCourseAction,
 } from "@/app/dashboard/courses/actions";
@@ -189,6 +200,156 @@ describe("dashboard course actions", () => {
       message: "You do not have permission to publish this course.",
     });
     expect(mocks.prisma.course.update).not.toHaveBeenCalled();
+  });
+
+  it("archives a manageable published course and logs the lifecycle event", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      title: "Course Design Foundations",
+      slug: "course-design-foundations",
+      status: "PUBLISHED",
+      organization: { slug: "athenemy" },
+    });
+    mocks.prisma.course.update.mockResolvedValue({});
+    mocks.prisma.courseLifecycleEvent.create.mockResolvedValue({});
+
+    await expect(
+      archiveCourseFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Course archived.",
+    });
+
+    expect(mocks.prisma.course.update).toHaveBeenCalledWith({
+      where: { id: "course_1" },
+      data: {
+        status: "ARCHIVED",
+        archivedAt: expect.any(Date),
+        archivedById: "user_1",
+      },
+    });
+    expect(mocks.prisma.courseLifecycleEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        courseId: "course_1",
+        actorId: "user_1",
+        action: "archived",
+        fromStatus: "PUBLISHED",
+        toStatus: "ARCHIVED",
+      }),
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/courses");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/s/athenemy");
+  });
+
+  it("restores an archived course to draft without publishing it", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      title: "Course Design Foundations",
+      slug: "course-design-foundations",
+      status: "ARCHIVED",
+      organization: null,
+    });
+    mocks.prisma.course.update.mockResolvedValue({});
+    mocks.prisma.courseLifecycleEvent.create.mockResolvedValue({});
+
+    await expect(
+      restoreCourseFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Course restored.",
+    });
+
+    expect(mocks.prisma.course.update).toHaveBeenCalledWith({
+      where: { id: "course_1" },
+      data: {
+        status: "DRAFT",
+        archivedAt: null,
+        archivedById: null,
+      },
+    });
+  });
+
+  it("deletes a confirmed empty draft course", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      title: "Course Design Foundations",
+      slug: "course-design-foundations",
+      status: "DRAFT",
+      organizationId: "org_1",
+      organization: null,
+      assessments: [],
+      _count: {
+        enrollments: 0,
+        payments: 0,
+        certificates: 0,
+      },
+    });
+    mocks.prisma.lessonProgress.count.mockResolvedValue(0);
+    mocks.prisma.assessmentSubmission.count.mockResolvedValue(0);
+    mocks.prisma.courseLifecycleEvent.create.mockImplementation(
+      (input) => input,
+    );
+    mocks.prisma.course.delete.mockImplementation((input) => input);
+
+    const formData = new FormData();
+    formData.set("confirmTitle", "Course Design Foundations");
+
+    await deleteCourseFormAction(
+      "course_1",
+      { status: "idle", message: null },
+      formData,
+    );
+
+    expect(mocks.prisma.course.delete).toHaveBeenCalledWith({
+      where: { id: "course_1" },
+    });
+    expect(mocks.redirect).toHaveBeenCalledWith("/dashboard/courses");
+  });
+
+  it("blocks hard delete for courses with learner records", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      title: "Course Design Foundations",
+      slug: "course-design-foundations",
+      status: "DRAFT",
+      organization: null,
+      assessments: [{ id: "assessment_1" }],
+      _count: {
+        enrollments: 1,
+        payments: 0,
+        certificates: 0,
+      },
+    });
+    mocks.prisma.lessonProgress.count.mockResolvedValue(0);
+    mocks.prisma.assessmentSubmission.count.mockResolvedValue(0);
+
+    const formData = new FormData();
+    formData.set("confirmTitle", "Course Design Foundations");
+
+    await expect(
+      deleteCourseFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        formData,
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message:
+        "This course has learner, payment, certificate, or assessment history. Archive it to remove it from the catalog while preserving records.",
+    });
+    expect(mocks.prisma.course.delete).not.toHaveBeenCalled();
   });
 
   it("rejects section creation for a course the instructor does not own", async () => {

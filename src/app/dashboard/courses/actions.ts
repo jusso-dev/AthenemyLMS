@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { CourseStatus, Prisma } from "@prisma/client";
 import {
   assessmentSchema,
   assessmentQuestionSchema,
@@ -105,6 +106,39 @@ export async function publishCourseFormAction(
 ) {
   void _formData;
   return runAction(() => publishCourseAction(courseId), "Course published.");
+}
+
+export async function archiveCourseFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _formData;
+  return runAction(() => archiveCourseAction(courseId), "Course archived.");
+}
+
+export async function restoreCourseFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _formData;
+  return runAction(() => restoreCourseAction(courseId), "Course restored.");
+}
+
+export async function deleteCourseFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+): Promise<ActionFormState> {
+  try {
+    await deleteCourseAction(courseId, formData);
+  } catch (error) {
+    return actionError(error);
+  }
+
+  revalidatePath("/dashboard/courses");
+  redirect("/dashboard/courses");
 }
 
 export async function createSectionFormAction(
@@ -504,6 +538,11 @@ export async function updateCourseAction(courseId: string, formData: FormData) {
     thumbnailUrl: formData.get("thumbnailUrl"),
   });
 
+  const nextArchivedAt =
+    parsed.status === "ARCHIVED" ? (course?.archivedAt ?? new Date()) : null;
+  const nextArchivedById =
+    parsed.status === "ARCHIVED" ? (course?.archivedById ?? user.id) : null;
+
   await prisma.course.update({
     where: { id: courseId },
     data: {
@@ -512,11 +551,24 @@ export async function updateCourseAction(courseId: string, formData: FormData) {
         parsed.status === "PUBLISHED" && course?.publishedAt === null
           ? new Date()
           : course?.publishedAt,
+      archivedAt: nextArchivedAt,
+      archivedById: nextArchivedById,
     },
   });
 
+  if (course?.status !== parsed.status) {
+    await logCourseLifecycleEvent({
+      courseId,
+      actorId: user.id,
+      action: "status_updated",
+      fromStatus: course?.status,
+      toStatus: parsed.status,
+    });
+  }
+
   revalidatePath("/dashboard/courses");
   revalidatePath(`/dashboard/courses/${courseId}/edit`);
+  revalidatePublishedCoursePaths(course);
 }
 
 export async function publishCourseAction(courseId: string) {
@@ -538,6 +590,14 @@ export async function publishCourseAction(courseId: string) {
     },
   });
 
+  await logCourseLifecycleEvent({
+    courseId,
+    actorId: user.id,
+    action: "published",
+    fromStatus: course.status,
+    toStatus: "PUBLISHED",
+  });
+
   await sendCoursePublishedEmail({
     to: user.email,
     name: user.name ?? undefined,
@@ -550,6 +610,151 @@ export async function publishCourseAction(courseId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/courses");
   revalidatePath(`/dashboard/courses/${courseId}/edit`);
+}
+
+export async function archiveCourseAction(courseId: string) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: { organization: { select: { slug: true } } },
+  });
+  if (!course || !canManageCourse(user, course)) {
+    throw new Error("You do not have permission to archive this course.");
+  }
+  if (course.status === "ARCHIVED") return;
+
+  await prisma.course.update({
+    where: { id: courseId },
+    data: {
+      status: "ARCHIVED",
+      archivedAt: new Date(),
+      archivedById: user.id,
+    },
+  });
+
+  await logCourseLifecycleEvent({
+    courseId,
+    actorId: user.id,
+    action: "archived",
+    fromStatus: course.status,
+    toStatus: "ARCHIVED",
+  });
+
+  revalidateCourseLifecyclePaths(course);
+}
+
+export async function restoreCourseAction(courseId: string) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: { organization: { select: { slug: true } } },
+  });
+  if (!course || !canManageCourse(user, course)) {
+    throw new Error("You do not have permission to restore this course.");
+  }
+  if (course.status !== "ARCHIVED") return;
+
+  await prisma.course.update({
+    where: { id: courseId },
+    data: {
+      status: "DRAFT",
+      archivedAt: null,
+      archivedById: null,
+    },
+  });
+
+  await logCourseLifecycleEvent({
+    courseId,
+    actorId: user.id,
+    action: "restored",
+    fromStatus: "ARCHIVED",
+    toStatus: "DRAFT",
+  });
+
+  revalidateCourseLifecyclePaths(course);
+}
+
+export async function deleteCourseAction(courseId: string, formData: FormData) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: {
+      organization: { select: { slug: true } },
+      assessments: { select: { id: true } },
+      _count: {
+        select: {
+          enrollments: true,
+          payments: true,
+          certificates: true,
+        },
+      },
+    },
+  });
+  if (!course || !canManageCourse(user, course)) {
+    throw new Error("You do not have permission to delete this course.");
+  }
+
+  const confirmTitle = String(formData.get("confirmTitle") ?? "").trim();
+  if (confirmTitle !== course.title) {
+    throw new Error(
+      `Type "${course.title}" to permanently delete this course.`,
+    );
+  }
+  if (course.status !== "DRAFT") {
+    throw new Error(
+      "Only draft courses can be permanently deleted. Archive this course instead.",
+    );
+  }
+
+  const assessmentIds = course.assessments.map((assessment) => assessment.id);
+  const [lessonProgressCount, assessmentSubmissionCount] = await Promise.all([
+    prisma.lessonProgress.count({
+      where: { lesson: { section: { courseId } } },
+    }),
+    assessmentIds.length
+      ? prisma.assessmentSubmission.count({
+          where: { assessmentId: { in: assessmentIds } },
+        })
+      : 0,
+  ]);
+  const blockingRecords =
+    course._count.enrollments +
+    course._count.payments +
+    course._count.certificates +
+    lessonProgressCount +
+    assessmentSubmissionCount;
+
+  if (blockingRecords > 0) {
+    throw new Error(
+      "This course has learner, payment, certificate, or assessment history. Archive it to remove it from the catalog while preserving records.",
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.courseLifecycleEvent.create({
+      data: {
+        courseId,
+        actorId: user.id,
+        action: "deleted",
+        fromStatus: course.status,
+        toStatus: null,
+        metadata: {
+          title: course.title,
+          slug: course.slug,
+          organizationId: course.organizationId,
+        },
+      },
+    }),
+    prisma.course.delete({ where: { id: courseId } }),
+  ]);
+
+  revalidateCourseLifecyclePaths(course);
 }
 
 export async function createSectionAction(
@@ -1242,6 +1447,70 @@ function assertDatabaseConfigured() {
       "Supabase is not configured. Add DATABASE_URL to .env.local.",
     );
   }
+}
+
+function revalidateCourseLifecyclePaths(course: {
+  id: string;
+  slug: string;
+  organization?: { slug: string } | null;
+}) {
+  revalidatePath("/");
+  revalidatePath("/courses");
+  revalidatePath(`/courses/${course.slug}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/courses");
+  revalidatePath(`/dashboard/courses/${course.id}/edit`);
+  revalidatePath(`/dashboard/learn/${course.id}`);
+  if (course.organization?.slug) {
+    revalidatePath(`/s/${course.organization.slug}`);
+  }
+}
+
+function revalidatePublishedCoursePaths(
+  course:
+    | {
+        id: string;
+        slug: string;
+        organization?: { slug: string } | null;
+      }
+    | null
+    | undefined,
+) {
+  if (course) {
+    revalidateCourseLifecyclePaths(course);
+    return;
+  }
+
+  revalidatePath("/");
+  revalidatePath("/courses");
+  revalidatePath("/dashboard/courses");
+}
+
+async function logCourseLifecycleEvent({
+  courseId,
+  actorId,
+  action,
+  fromStatus,
+  toStatus,
+  metadata,
+}: {
+  courseId: string;
+  actorId: string;
+  action: string;
+  fromStatus?: CourseStatus | null;
+  toStatus?: CourseStatus | null;
+  metadata?: Prisma.InputJsonObject;
+}) {
+  await prisma.courseLifecycleEvent.create({
+    data: {
+      courseId,
+      actorId,
+      action,
+      fromStatus: fromStatus ?? null,
+      toStatus: toStatus ?? null,
+      metadata,
+    },
+  });
 }
 
 async function uniqueCourseSlug(baseSlug: string) {
