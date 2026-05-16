@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { CourseManagementNav } from "@/components/courses/course-management-nav";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Progress } from "@/components/ui/progress";
@@ -14,11 +16,51 @@ import { formatPrice } from "@/lib/utils";
 import { SetupMessage } from "@/lib/setup-message";
 
 export default async function CourseInsightsPage({
+  searchParams,
   params,
 }: {
+  searchParams: Promise<{
+    status?: string | string[];
+    assessment?: string | string[];
+  }>;
   params: Promise<{ courseId: string }>;
 }) {
+  const query = await searchParams;
+  const statusParam = Array.isArray(query.status)
+    ? query.status[0]
+    : query.status;
+  const assessmentParam = Array.isArray(query.assessment)
+    ? query.assessment[0]
+    : query.assessment;
+  const status: string = ["complete", "active", "at-risk"].includes(
+    statusParam ?? "",
+  )
+    ? (statusParam ?? "all")
+    : "all";
+  const assessmentStatus: string = [
+    "passed",
+    "needs-review",
+    "no-submission",
+  ].includes(assessmentParam ?? "")
+    ? (assessmentParam ?? "all")
+    : "all";
   const { courseId } = await params;
+  const insightsHref = (next: {
+    status?: string;
+    assessmentStatus?: string;
+  }) => {
+    const params = new URLSearchParams();
+    const nextStatus = next.status ?? status;
+    const nextAssessment = next.assessmentStatus ?? assessmentStatus;
+
+    if (nextStatus !== "all") params.set("status", nextStatus);
+    if (nextAssessment !== "all") {
+      params.set("assessment", nextAssessment);
+    }
+
+    const search = params.toString();
+    return `/dashboard/courses/${courseId}/insights${search ? `?${search}` : ""}`;
+  };
   const databaseMissing = missingEnv(["DATABASE_URL"]).length > 0;
   const user = await getCurrentAppUser();
   const course = databaseMissing
@@ -102,6 +144,27 @@ export default async function CourseInsightsPage({
         certificate,
       };
     }) ?? [];
+  const filteredLearnerRows = learnerRows.filter((row) => {
+    const matchesStatus =
+      status === "complete"
+        ? row.progress === 100
+        : status === "active"
+          ? row.progress > 0 && row.progress < 100
+          : status === "at-risk"
+            ? row.progress < 50
+            : true;
+    const matchesAssessment =
+      assessmentStatus === "passed"
+        ? row.totalSubmissions > 0 &&
+          row.passedAssessments === row.totalSubmissions
+        : assessmentStatus === "needs-review"
+          ? row.totalSubmissions > 0 &&
+            row.passedAssessments < row.totalSubmissions
+          : assessmentStatus === "no-submission"
+            ? row.totalSubmissions === 0
+            : true;
+    return matchesStatus && matchesAssessment;
+  });
   const completionRate = learnerRows.length
     ? Math.round(
         (learnerRows.filter((row) => row.progress === 100).length /
@@ -164,11 +227,69 @@ export default async function CourseInsightsPage({
               <CardTitle>Gradebook</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {learnerRows.length === 0 ? (
+              <div className="space-y-3 border-b pb-3">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "All progress", value: "all" },
+                    { label: "Complete", value: "complete" },
+                    { label: "Active", value: "active" },
+                    { label: "At risk", value: "at-risk" },
+                  ].map((item) => {
+                    const active = status === item.value;
+                    return (
+                      <Button
+                        key={item.value}
+                        asChild
+                        variant={active ? "secondary" : "ghost"}
+                        size="sm"
+                      >
+                        <Link href={insightsHref({ status: item.value })}>
+                          {item.label}
+                        </Link>
+                      </Button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "All assessments", value: "all" },
+                    { label: "Passed", value: "passed" },
+                    { label: "Needs review", value: "needs-review" },
+                    { label: "No submission", value: "no-submission" },
+                  ].map((item) => {
+                    const active = assessmentStatus === item.value;
+                    return (
+                      <Button
+                        key={item.value}
+                        asChild
+                        variant={active ? "secondary" : "ghost"}
+                        size="sm"
+                      >
+                        <Link
+                          href={insightsHref({
+                            assessmentStatus: item.value,
+                          })}
+                        >
+                          {item.label}
+                        </Link>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+              {filteredLearnerRows.length === 0 ? (
                 <EmptyState
                   icon={BarChart3}
-                  title="No learner data yet"
-                  description="Enroll learners and collect lesson progress or assessment submissions to populate this report."
+                  title={
+                    learnerRows.length === 0
+                      ? "No learner data yet"
+                      : "No learners match these filters"
+                  }
+                  description={
+                    learnerRows.length === 0
+                      ? "Enroll learners and collect lesson progress or assessment submissions to populate this report."
+                      : "Adjust the progress or assessment filters to expand this report."
+                  }
                 />
               ) : null}
               <div className="hidden rounded-md border bg-muted/40 px-3 py-2 text-xs font-medium uppercase text-muted-foreground lg:grid lg:grid-cols-[1fr_180px_150px_130px]">
@@ -177,7 +298,7 @@ export default async function CourseInsightsPage({
                 <span>Assessments</span>
                 <span>Certificate</span>
               </div>
-              {learnerRows.map((row) => (
+              {filteredLearnerRows.map((row) => (
                 <div
                   key={row.user.id}
                   className="grid gap-3 rounded-md border p-4 lg:grid-cols-[1fr_180px_150px_130px]"

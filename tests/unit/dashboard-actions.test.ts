@@ -21,10 +21,22 @@ const mocks = vi.hoisted(() => {
     lessonProgress: {
       upsert: vi.fn(),
     },
-    enrollment: {
+    assessment: {
+      delete: vi.fn(),
       findUnique: vi.fn(),
     },
+    assessmentQuestion: {
+      create: vi.fn(),
+      delete: vi.fn(),
+      update: vi.fn(),
+    },
+    enrollment: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn(),
+    },
     user: {
+      findUnique: vi.fn(),
       update: vi.fn(),
     },
     $transaction: vi.fn(async (operations: unknown[]) => operations),
@@ -49,8 +61,14 @@ import {
   createLessonAction,
   createSectionAction,
   markLessonCompleteAction,
+  cancelCourseEnrollmentFormAction,
+  deleteAssessmentFormAction,
+  deleteAssessmentQuestionFormAction,
+  enrollCourseLearnerFormAction,
+  moveAssessmentQuestionFormAction,
   moveLessonFormAction,
   moveSectionFormAction,
+  updateAssessmentQuestionFormAction,
   updateCourseAction,
 } from "@/app/dashboard/courses/actions";
 
@@ -259,6 +277,28 @@ describe("dashboard course actions", () => {
     });
   });
 
+  it("returns a friendly error when section reorder is not permitted", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "someone_else",
+      sections: [{ id: "section_1", position: 0 }],
+    });
+
+    await expect(
+      moveSectionFormAction(
+        "course_1",
+        "section_1",
+        "down",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "You do not have permission to manage this course.",
+    });
+    expect(mocks.prisma.courseSection.update).not.toHaveBeenCalled();
+  });
+
   it("moves a lesson across adjacent sections and normalizes lesson positions", async () => {
     mocks.prisma.lesson.findUnique.mockResolvedValue({
       id: "lesson_2",
@@ -308,5 +348,173 @@ describe("dashboard course actions", () => {
       where: { id: "lesson_3" },
       data: { sectionId: "section_2", position: 1 },
     });
+  });
+
+  it("enrolls a learner with upsert so cancelled access can be reactivated", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+    });
+    mocks.prisma.user.findUnique.mockResolvedValue({
+      id: "learner_1",
+      email: "learner@example.com",
+    });
+    mocks.prisma.enrollment.upsert.mockResolvedValue({});
+
+    const formData = new FormData();
+    formData.set("userId", "learner_1");
+
+    await expect(
+      enrollCourseLearnerFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        formData,
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Learner enrolled.",
+    });
+
+    expect(mocks.prisma.enrollment.upsert).toHaveBeenCalledWith({
+      where: { userId_courseId: { userId: "learner_1", courseId: "course_1" } },
+      create: { userId: "learner_1", courseId: "course_1", status: "ACTIVE" },
+      update: { status: "ACTIVE" },
+    });
+  });
+
+  it("cancels learner access without deleting enrollment history", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+    });
+    mocks.prisma.enrollment.update.mockResolvedValue({});
+
+    await expect(
+      cancelCourseEnrollmentFormAction(
+        "course_1",
+        "learner_1",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Learner access cancelled.",
+    });
+
+    expect(mocks.prisma.enrollment.update).toHaveBeenCalledWith({
+      where: { userId_courseId: { userId: "learner_1", courseId: "course_1" } },
+      data: { status: "CANCELLED" },
+    });
+  });
+
+  it("moves assessment questions and persists normalized positions", async () => {
+    mocks.prisma.assessment.findUnique.mockResolvedValue({
+      id: "assessment_1",
+      courseId: "course_1",
+      course: { id: "course_1", instructorId: "user_1" },
+      questions: [
+        { id: "question_1", position: 0 },
+        { id: "question_2", position: 1 },
+        { id: "question_3", position: 2 },
+      ],
+    });
+    mocks.prisma.assessmentQuestion.update.mockImplementation((input) => input);
+
+    await expect(
+      moveAssessmentQuestionFormAction(
+        "course_1",
+        "assessment_1",
+        "question_2",
+        "up",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Question order saved.",
+    });
+
+    expect(mocks.prisma.assessmentQuestion.update).toHaveBeenCalledTimes(3);
+    expect(mocks.prisma.assessmentQuestion.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "question_2" },
+      data: { position: 0 },
+    });
+    expect(mocks.prisma.assessmentQuestion.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "question_1" },
+      data: { position: 1 },
+    });
+  });
+
+  it("blocks editing a question that is not part of the assessment", async () => {
+    mocks.prisma.assessment.findUnique.mockResolvedValue({
+      id: "assessment_1",
+      courseId: "course_1",
+      course: { id: "course_1", instructorId: "user_1" },
+      questions: [{ id: "question_1", position: 0 }],
+    });
+
+    const formData = new FormData();
+    formData.set("prompt", "Updated question prompt?");
+    formData.set("options", "First\nSecond");
+    formData.set("correctIndex", "0");
+
+    await expect(
+      updateAssessmentQuestionFormAction(
+        "course_1",
+        "assessment_1",
+        "question_2",
+        { status: "idle", message: null },
+        formData,
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "Question not found.",
+    });
+    expect(mocks.prisma.assessmentQuestion.update).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit confirmation before deleting a question", async () => {
+    const formData = new FormData();
+
+    await expect(
+      deleteAssessmentQuestionFormAction(
+        "course_1",
+        "assessment_1",
+        "question_1",
+        { status: "idle", message: null },
+        formData,
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "Confirm deleting this question first.",
+    });
+    expect(mocks.prisma.assessmentQuestion.delete).not.toHaveBeenCalled();
+  });
+
+  it("deletes a confirmed assessment and redirects to the assessment list", async () => {
+    mocks.prisma.assessment.findUnique.mockResolvedValue({
+      id: "assessment_1",
+      courseId: "course_1",
+      course: { id: "course_1", instructorId: "user_1" },
+      questions: [{ id: "question_1", position: 0 }],
+    });
+    mocks.prisma.assessment.delete.mockResolvedValue({});
+
+    const formData = new FormData();
+    formData.set("confirmDelete", "on");
+
+    await deleteAssessmentFormAction(
+      "course_1",
+      "assessment_1",
+      { status: "idle", message: null },
+      formData,
+    );
+
+    expect(mocks.prisma.assessment.delete).toHaveBeenCalledWith({
+      where: { id: "assessment_1" },
+    });
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      "/dashboard/courses/course_1/assessments",
+    );
   });
 });

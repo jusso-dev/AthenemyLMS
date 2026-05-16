@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClipboardCheck } from "lucide-react";
+import { ArrowDown, ArrowUp, ClipboardCheck, Trash2 } from "lucide-react";
 import {
   ActionForm,
   PendingSubmitButton,
 } from "@/components/forms/action-form";
-import { updateAssessmentFormAction } from "@/app/dashboard/courses/actions";
+import {
+  createAssessmentQuestionFormAction,
+  deleteAssessmentFormAction,
+  deleteAssessmentQuestionFormAction,
+  moveAssessmentQuestionFormAction,
+  updateAssessmentFormAction,
+  updateAssessmentQuestionFormAction,
+} from "@/app/dashboard/courses/actions";
 import { CourseManagementNav } from "@/components/courses/course-management-nav";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -133,28 +140,164 @@ export default async function AssessmentManagementPage({
               <CardTitle>Questions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <ActionForm
+                action={createAssessmentQuestionFormAction.bind(
+                  null,
+                  courseId,
+                  assessment.id,
+                )}
+                className="grid gap-3 rounded-md border bg-muted/20 p-4"
+              >
+                <p className="font-medium">Add question</p>
+                <Textarea
+                  name="prompt"
+                  placeholder="Question prompt"
+                  required
+                />
+                <Textarea
+                  name="options"
+                  placeholder="Answer options, one per line"
+                  required
+                />
+                <div className="grid gap-3 sm:grid-cols-[180px_auto]">
+                  <Input
+                    name="correctIndex"
+                    type="number"
+                    min="0"
+                    max="9"
+                    placeholder="Correct option index"
+                    required
+                  />
+                  <PendingSubmitButton
+                    className="w-fit"
+                    pendingLabel="Adding..."
+                  >
+                    Add question
+                  </PendingSubmitButton>
+                </div>
+              </ActionForm>
               {assessment.questions.length === 0 ? (
                 <EmptyState
                   icon={ClipboardCheck}
                   title="No questions yet"
-                  description="Question editing will live here. Create a quiz question from the assessments list for now."
+                  description="Add a question to start building this assessment."
                 />
               ) : null}
               {assessment.questions.map((question, index) => (
                 <div key={question.id} className="rounded-md border p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium">
-                        Question {index + 1}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {question.prompt}
-                      </p>
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-medium">Question {index + 1}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">
+                        Answer {question.correctIndex + 1}
+                      </Badge>
+                      <ActionForm
+                        action={moveAssessmentQuestionFormAction.bind(
+                          null,
+                          courseId,
+                          assessment.id,
+                          question.id,
+                          "up",
+                        )}
+                        inlineMessage={false}
+                      >
+                        <PendingSubmitButton
+                          variant="outline"
+                          size="icon"
+                          pendingLabel="..."
+                          disabled={index === 0}
+                          aria-label="Move question up"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </PendingSubmitButton>
+                      </ActionForm>
+                      <ActionForm
+                        action={moveAssessmentQuestionFormAction.bind(
+                          null,
+                          courseId,
+                          assessment.id,
+                          question.id,
+                          "down",
+                        )}
+                        inlineMessage={false}
+                      >
+                        <PendingSubmitButton
+                          variant="outline"
+                          size="icon"
+                          pendingLabel="..."
+                          disabled={index === assessment.questions.length - 1}
+                          aria-label="Move question down"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </PendingSubmitButton>
+                      </ActionForm>
                     </div>
-                    <Badge variant="secondary">
-                      Answer {question.correctIndex + 1}
-                    </Badge>
                   </div>
+                  <ActionForm
+                    action={updateAssessmentQuestionFormAction.bind(
+                      null,
+                      courseId,
+                      assessment.id,
+                      question.id,
+                    )}
+                    className="grid gap-3"
+                  >
+                    <Textarea
+                      name="prompt"
+                      defaultValue={question.prompt}
+                      required
+                    />
+                    <Textarea
+                      name="options"
+                      defaultValue={formatOptions(question.options)}
+                      required
+                    />
+                    <div className="grid gap-3 sm:grid-cols-[180px_auto_auto]">
+                      <Input
+                        name="correctIndex"
+                        type="number"
+                        min="0"
+                        max="9"
+                        defaultValue={question.correctIndex}
+                        required
+                      />
+                      <PendingSubmitButton
+                        variant="outline"
+                        className="w-fit"
+                        pendingLabel="Saving..."
+                      >
+                        Save question
+                      </PendingSubmitButton>
+                    </div>
+                  </ActionForm>
+                  <ActionForm
+                    action={deleteAssessmentQuestionFormAction.bind(
+                      null,
+                      courseId,
+                      assessment.id,
+                      question.id,
+                    )}
+                    className="mt-3 border-t pt-3"
+                    inlineMessage={false}
+                  >
+                    <label className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        name="confirmDelete"
+                        disabled={assessment.questions.length <= 1}
+                      />
+                      Confirm deleting this question
+                    </label>
+                    <PendingSubmitButton
+                      variant="destructive"
+                      size="sm"
+                      pendingLabel="Deleting..."
+                      disabled={assessment.questions.length <= 1}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete question
+                    </PendingSubmitButton>
+                  </ActionForm>
                 </div>
               ))}
             </CardContent>
@@ -196,8 +339,45 @@ export default async function AssessmentManagementPage({
               ))}
             </CardContent>
           </Card>
+
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle>Delete assessment</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ActionForm
+                action={deleteAssessmentFormAction.bind(
+                  null,
+                  courseId,
+                  assessment.id,
+                )}
+                className="grid gap-3"
+              >
+                <p className="text-sm text-muted-foreground">
+                  This deletes the assessment, questions, and learner
+                  submissions for this quiz.
+                </p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="confirmDelete" />
+                  Confirm deleting this assessment
+                </label>
+                <PendingSubmitButton
+                  variant="destructive"
+                  className="w-fit"
+                  pendingLabel="Deleting..."
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete assessment
+                </PendingSubmitButton>
+              </ActionForm>
+            </CardContent>
+          </Card>
         </>
       ) : null}
     </div>
   );
+}
+
+function formatOptions(value: unknown) {
+  return Array.isArray(value) ? value.map(String).join("\n") : "";
 }

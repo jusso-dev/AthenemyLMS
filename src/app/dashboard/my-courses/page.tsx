@@ -10,9 +10,25 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getMyCourses } from "@/lib/dashboard-data";
 import { SetupMessage } from "@/lib/setup-message";
 
-export default async function MyCoursesPage() {
+export default async function MyCoursesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const statusParam = Array.isArray(params.status)
+    ? params.status[0]
+    : params.status;
+  const status = ["active", "completed"].includes(statusParam ?? "")
+    ? statusParam
+    : "all";
   const user = await getCurrentAppUser();
   const { mode, courses, summary } = await getMyCourses(user);
+  const filteredCourses = courses.filter((item) => {
+    if (status === "active") return item.progressPercent < 100;
+    if (status === "completed") return item.progressPercent === 100;
+    return true;
+  });
 
   return (
     <div className="space-y-8">
@@ -43,17 +59,51 @@ export default async function MyCoursesPage() {
           ))}
         </div>
       ) : null}
+      {mode === "database" ? (
+        <div className="flex gap-2 overflow-x-auto border-b pb-3">
+          {[
+            { href: "/dashboard/my-courses", label: "All" },
+            { href: "/dashboard/my-courses?status=active", label: "Active" },
+            {
+              href: "/dashboard/my-courses?status=completed",
+              label: "Completed",
+            },
+          ].map((item) => {
+            const active =
+              (status === "all" && item.label === "All") ||
+              status === item.label.toLowerCase();
+            return (
+              <Button
+                key={item.href}
+                asChild
+                variant={active ? "secondary" : "ghost"}
+                size="sm"
+              >
+                <Link href={item.href}>{item.label}</Link>
+              </Button>
+            );
+          })}
+        </div>
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-2">
         {mode === "permission" ? (
           <p className="rounded-md border p-4 text-sm text-muted-foreground lg:col-span-2">
             Sign in to view enrolled courses.
           </p>
         ) : null}
-        {mode !== "permission" && courses.length === 0 ? (
+        {mode !== "permission" && filteredCourses.length === 0 ? (
           <EmptyState
             icon={GraduationCap}
-            title="No enrollments yet"
-            description="Browse the catalogue and enroll in a course to start learning."
+            title={
+              courses.length === 0
+                ? "No enrollments yet"
+                : "No courses in this view"
+            }
+            description={
+              courses.length === 0
+                ? "Browse the catalogue and enroll in a course to start learning."
+                : "Switch filters to see the rest of your enrolled courses."
+            }
             action={
               <Button asChild variant="outline" size="sm">
                 <Link href="/courses">Browse catalogue</Link>
@@ -62,7 +112,7 @@ export default async function MyCoursesPage() {
             className="lg:col-span-2"
           />
         ) : null}
-        {courses.map((item) => (
+        {filteredCourses.map((item) => (
           <Card key={item.course.id} className="flex h-full flex-col">
             <CardHeader className="space-y-4">
               <div className="flex items-start justify-between gap-4">

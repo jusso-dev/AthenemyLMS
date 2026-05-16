@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Users } from "lucide-react";
 import {
   ActionForm,
@@ -9,6 +10,7 @@ import {
 } from "@/app/dashboard/courses/actions";
 import { CourseManagementNav } from "@/components/courses/course-management-nav";
 import { PageHeader } from "@/components/layout/page-header";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -18,14 +20,29 @@ import { fallbackNotice, getCourseStudents } from "@/lib/dashboard-data";
 import { SetupMessage } from "@/lib/setup-message";
 
 export default async function CourseStudentsPage({
+  searchParams,
   params,
 }: {
+  searchParams: Promise<{ status?: string | string[] }>;
   params: Promise<{ courseId: string }>;
 }) {
+  const query = await searchParams;
+  const statusParam = Array.isArray(query.status)
+    ? query.status[0]
+    : query.status;
+  const status = ["active", "completed", "cancelled"].includes(statusParam ?? "")
+    ? statusParam
+    : "all";
   const { courseId } = await params;
   const user = await getCurrentAppUser();
   const { mode, students, availableUsers, courseTitle } =
     await getCourseStudents(user, courseId);
+  const filteredStudents = students.filter((student) => {
+    if (status === "active") return student.status === "Active";
+    if (status === "completed") return student.status === "Completed";
+    if (status === "cancelled") return student.status === "Cancelled";
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -80,19 +97,63 @@ export default async function CourseStudentsPage({
           <CardTitle>Enrolled learners</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {mode === "database" ? (
+            <div className="flex gap-2 overflow-x-auto border-b pb-3">
+              {[
+                {
+                  href: `/dashboard/courses/${courseId}/students`,
+                  label: "All",
+                },
+                {
+                  href: `/dashboard/courses/${courseId}/students?status=active`,
+                  label: "Active",
+                },
+                {
+                  href: `/dashboard/courses/${courseId}/students?status=completed`,
+                  label: "Completed",
+                },
+                {
+                  href: `/dashboard/courses/${courseId}/students?status=cancelled`,
+                  label: "Cancelled",
+                },
+              ].map((item) => {
+                const active =
+                  (status === "all" && item.label === "All") ||
+                  status === item.label.toLowerCase();
+                return (
+                  <Button
+                    key={item.href}
+                    asChild
+                    variant={active ? "secondary" : "ghost"}
+                    size="sm"
+                  >
+                    <Link href={item.href}>{item.label}</Link>
+                  </Button>
+                );
+              })}
+            </div>
+          ) : null}
           {mode === "permission" ? (
             <p className="rounded-md border p-4 text-sm text-muted-foreground">
               Instructor or admin access is required to view course students.
             </p>
           ) : null}
-          {mode !== "permission" && students.length === 0 ? (
+          {mode !== "permission" && filteredStudents.length === 0 ? (
             <EmptyState
               icon={Users}
-              title="No enrolled learners"
-              description="Learners will appear here after they enroll or are assigned to this course."
+              title={
+                students.length === 0
+                  ? "No enrolled learners"
+                  : "No learners in this view"
+              }
+              description={
+                students.length === 0
+                  ? "Learners will appear here after they enroll or are assigned to this course."
+                  : "Switch filters to see learners with a different enrollment status."
+              }
             />
           ) : null}
-          {students.map((student) => (
+          {filteredStudents.map((student) => (
             <div
               key={student.email}
               className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_160px_auto]"

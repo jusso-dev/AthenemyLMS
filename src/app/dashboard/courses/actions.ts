@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   assessmentSchema,
+  assessmentQuestionSchema,
   assessmentSettingsSchema,
   courseSchema,
   lessonContentSchema,
@@ -191,6 +192,98 @@ export async function updateAssessmentFormAction(
   return runAction(
     () => updateAssessmentAction(courseId, assessmentId, formData),
     "Assessment saved.",
+  );
+}
+
+export async function deleteAssessmentFormAction(
+  courseId: string,
+  assessmentId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+): Promise<ActionFormState> {
+  try {
+    requireConfirmation(
+      formData,
+      "Confirm deleting this assessment and its submissions first.",
+    );
+    await deleteAssessmentAction(courseId, assessmentId);
+  } catch (error) {
+    return actionError(error);
+  }
+
+  revalidatePath(`/dashboard/courses/${courseId}/assessments`);
+  revalidatePath(`/dashboard/learn/${courseId}`);
+  redirect(`/dashboard/courses/${courseId}/assessments`);
+}
+
+export async function createAssessmentQuestionFormAction(
+  courseId: string,
+  assessmentId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => createAssessmentQuestionAction(courseId, assessmentId, formData),
+    "Question added.",
+  );
+}
+
+export async function updateAssessmentQuestionFormAction(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () =>
+      updateAssessmentQuestionAction(
+        courseId,
+        assessmentId,
+        questionId,
+        formData,
+      ),
+    "Question saved.",
+  );
+}
+
+export async function moveAssessmentQuestionFormAction(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  direction: "up" | "down",
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _formData;
+  return runAction(
+    () =>
+      moveAssessmentQuestionAction(
+        courseId,
+        assessmentId,
+        questionId,
+        direction,
+      ),
+    "Question order saved.",
+  );
+}
+
+export async function deleteAssessmentQuestionFormAction(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () =>
+      deleteAssessmentQuestionAction(
+        courseId,
+        assessmentId,
+        questionId,
+        formData,
+      ),
+    "Question deleted.",
   );
 }
 
@@ -756,6 +849,144 @@ export async function updateAssessmentAction(
   revalidatePath(`/dashboard/learn/${courseId}`);
 }
 
+export async function deleteAssessmentAction(
+  courseId: string,
+  assessmentId: string,
+) {
+  const assessment = await requireManageableAssessment(courseId, assessmentId);
+
+  await prisma.assessment.delete({ where: { id: assessment.id } });
+
+  revalidatePath(`/dashboard/courses/${courseId}/assessments`);
+  revalidatePath(`/dashboard/learn/${courseId}`);
+}
+
+export async function createAssessmentQuestionAction(
+  courseId: string,
+  assessmentId: string,
+  formData: FormData,
+) {
+  const assessment = await requireManageableAssessment(courseId, assessmentId);
+  const parsed = assessmentQuestionSchema.parse({
+    prompt: formData.get("prompt"),
+    options: formData.get("options"),
+    correctIndex: formData.get("correctIndex"),
+  });
+  const options = parseQuizOptions(parsed.options);
+  if (parsed.correctIndex >= options.length) {
+    throw new Error("Correct answer must match one of the provided options.");
+  }
+
+  await prisma.assessmentQuestion.create({
+    data: {
+      assessmentId,
+      prompt: parsed.prompt,
+      options,
+      correctIndex: parsed.correctIndex,
+      position: assessment.questions.length,
+    },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/assessments/${assessmentId}`);
+  revalidatePath(`/dashboard/learn/${courseId}/assessments/${assessmentId}`);
+}
+
+export async function updateAssessmentQuestionAction(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  formData: FormData,
+) {
+  const assessment = await requireManageableAssessment(courseId, assessmentId);
+  assertQuestionBelongsToAssessment(assessment, questionId);
+
+  const parsed = assessmentQuestionSchema.parse({
+    prompt: formData.get("prompt"),
+    options: formData.get("options"),
+    correctIndex: formData.get("correctIndex"),
+  });
+  const options = parseQuizOptions(parsed.options);
+  if (parsed.correctIndex >= options.length) {
+    throw new Error("Correct answer must match one of the provided options.");
+  }
+
+  await prisma.assessmentQuestion.update({
+    where: { id: questionId },
+    data: {
+      prompt: parsed.prompt,
+      options,
+      correctIndex: parsed.correctIndex,
+    },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/assessments/${assessmentId}`);
+  revalidatePath(`/dashboard/learn/${courseId}/assessments/${assessmentId}`);
+}
+
+export async function moveAssessmentQuestionAction(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  direction: "up" | "down",
+) {
+  const assessment = await requireManageableAssessment(courseId, assessmentId);
+  const currentIndex = assessment.questions.findIndex(
+    (question) => question.id === questionId,
+  );
+  if (currentIndex === -1) throw new Error("Question not found.");
+
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (targetIndex < 0 || targetIndex >= assessment.questions.length) return;
+
+  const reordered = [...assessment.questions];
+  const [question] = reordered.splice(currentIndex, 1);
+  reordered.splice(targetIndex, 0, question);
+
+  await prisma.$transaction(
+    reordered.map((item, position) =>
+      prisma.assessmentQuestion.update({
+        where: { id: item.id },
+        data: { position },
+      }),
+    ),
+  );
+
+  revalidatePath(`/dashboard/courses/${courseId}/assessments/${assessmentId}`);
+  revalidatePath(`/dashboard/learn/${courseId}/assessments/${assessmentId}`);
+}
+
+export async function deleteAssessmentQuestionAction(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  formData: FormData,
+) {
+  requireConfirmation(formData, "Confirm deleting this question first.");
+  const assessment = await requireManageableAssessment(courseId, assessmentId);
+  assertQuestionBelongsToAssessment(assessment, questionId);
+
+  if (assessment.questions.length <= 1) {
+    throw new Error("An assessment needs at least one question.");
+  }
+
+  const remainingQuestions = assessment.questions.filter(
+    (question) => question.id !== questionId,
+  );
+
+  await prisma.$transaction([
+    prisma.assessmentQuestion.delete({ where: { id: questionId } }),
+    ...remainingQuestions.map((question, position) =>
+      prisma.assessmentQuestion.update({
+        where: { id: question.id },
+        data: { position },
+      }),
+    ),
+  ]);
+
+  revalidatePath(`/dashboard/courses/${courseId}/assessments/${assessmentId}`);
+  revalidatePath(`/dashboard/learn/${courseId}/assessments/${assessmentId}`);
+}
+
 export async function enrollCourseLearnerAction(
   courseId: string,
   formData: FormData,
@@ -783,6 +1014,45 @@ export async function enrollCourseLearnerAction(
   revalidatePath(`/dashboard/courses/${courseId}/students`);
   revalidatePath(`/dashboard/learn/${courseId}`);
   revalidatePath("/dashboard/my-courses");
+}
+
+async function requireManageableAssessment(
+  courseId: string,
+  assessmentId: string,
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    include: {
+      course: true,
+      questions: { orderBy: { position: "asc" } },
+    },
+  });
+  if (!assessment || assessment.courseId !== courseId) {
+    throw new Error("Assessment not found.");
+  }
+  if (!canManageCourse(user, assessment.course)) {
+    throw new Error("You do not have permission to manage this assessment.");
+  }
+
+  return assessment;
+}
+
+function assertQuestionBelongsToAssessment(
+  assessment: Awaited<ReturnType<typeof requireManageableAssessment>>,
+  questionId: string,
+) {
+  if (!assessment.questions.some((question) => question.id === questionId)) {
+    throw new Error("Question not found.");
+  }
+}
+
+function requireConfirmation(formData: FormData, message: string) {
+  if (formData.get("confirmDelete") !== "on") {
+    throw new Error(message);
+  }
 }
 
 export async function cancelCourseEnrollmentAction(
