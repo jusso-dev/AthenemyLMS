@@ -200,8 +200,8 @@ export default async function ManageCoursesPage({
                   </ActionForm>
                 )}
                 <Button asChild size="sm" variant="outline">
-                  <Link href={`/dashboard/courses/${course.id}/edit`}>
-                    Edit
+                  <Link href={`/dashboard/courses/${course.id}/studio`}>
+                    Studio
                   </Link>
                 </Button>
               </div>

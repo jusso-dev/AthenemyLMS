@@ -142,8 +142,26 @@ describe("dashboard course actions", () => {
       instructorId: "user_1",
       title: "Course Design Foundations",
       slug: "course-design-foundations",
+      subtitle: "Build better courses",
+      description: "A structured course for creators.",
+      thumbnailUrl: "https://example.com/thumb.jpg",
       status: "DRAFT",
       publishedAt: null,
+      sections: [
+        {
+          title: "Start",
+          lessons: [
+            {
+              title: "Plan the course",
+              content: "Lesson notes",
+              videoUrl: null,
+              videoAssetKey: null,
+              durationMinutes: 10,
+            },
+          ],
+        },
+      ],
+      assessments: [{ id: "assessment_1", requiredForCompletion: true }],
     });
     mocks.prisma.course.update.mockResolvedValue({
       id: "course_1",
@@ -198,6 +216,35 @@ describe("dashboard course actions", () => {
     ).resolves.toEqual({
       status: "error",
       message: "You do not have permission to publish this course.",
+    });
+    expect(mocks.prisma.course.update).not.toHaveBeenCalled();
+  });
+
+  it("returns publish readiness blockers as friendly action errors", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      title: "Course Design Foundations",
+      slug: "course-design-foundations",
+      subtitle: "",
+      description: "",
+      thumbnailUrl: "",
+      status: "DRAFT",
+      publishedAt: null,
+      sections: [],
+      assessments: [],
+    });
+
+    await expect(
+      publishCourseFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message:
+        "Course is not ready to publish: Add at least one section with one lesson. Add lesson content before publishing.",
     });
     expect(mocks.prisma.course.update).not.toHaveBeenCalled();
   });
