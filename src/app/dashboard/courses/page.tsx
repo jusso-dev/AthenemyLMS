@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { Plus, Search } from "lucide-react";
+import { LibraryBig, Plus, Search } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getManageCourses } from "@/lib/dashboard-data";
@@ -22,20 +24,18 @@ export default async function ManageCoursesPage({
   return (
     <div className="space-y-8">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Courses</h1>
-          <p className="mt-2 text-muted-foreground">
-            Create, edit, publish, and inspect course performance.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/dashboard/courses/new">
-            <Plus className="h-4 w-4" />
-            New course
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Courses"
+        description="Create, edit, publish, and inspect the learning products in your catalogue."
+        actions={
+          <Button asChild>
+            <Link href="/dashboard/courses/new">
+              <Plus className="h-4 w-4" />
+              New course
+            </Link>
+          </Button>
+        }
+      />
       <form className="relative max-w-sm">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
@@ -58,9 +58,20 @@ export default async function ManageCoursesPage({
             </p>
           ) : null}
           {mode !== "permission" && courses.length === 0 ? (
-            <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              No courses match this filter.
-            </p>
+            <EmptyState
+              icon={LibraryBig}
+              title={q ? "No matching courses" : "No courses yet"}
+              description={
+                q
+                  ? "Try a different title or subtitle search."
+                  : "Start with a draft course, then add sections, lessons, assessments, and publishing details."
+              }
+              action={
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/dashboard/courses/new">Create course</Link>
+                </Button>
+              }
+            />
           ) : null}
           {courses.map((course) => (
             <div

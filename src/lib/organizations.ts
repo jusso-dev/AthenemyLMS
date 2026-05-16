@@ -36,16 +36,24 @@ export async function createOrganizationForUser(input: {
   const baseSlug = slugify(input.name);
   const slug = `${baseSlug}-${createInvitationToken().slice(0, 6)}`;
 
-  return prisma.organization.create({
-    data: {
-      name: input.name,
-      slug,
-      supportEmail: input.supportEmail || null,
-      memberships: {
-        create: { userId: input.userId, role: "OWNER" },
+  const [, organization] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: input.userId },
+      data: { role: "ADMIN" },
+    }),
+    prisma.organization.create({
+      data: {
+        name: input.name,
+        slug,
+        supportEmail: input.supportEmail || null,
+        memberships: {
+          create: { userId: input.userId, role: "OWNER" },
+        },
       },
-    },
-  });
+    }),
+  ]);
+
+  return organization;
 }
 
 export async function acceptInvitation(input: {

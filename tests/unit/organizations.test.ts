@@ -9,6 +9,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   prisma: {
+    user: { update: vi.fn() },
     organization: { create: vi.fn() },
     organizationInvitation: {
       findUnique: vi.fn(),
@@ -47,7 +48,9 @@ describe("organizations", () => {
   });
 
   it("creates an organisation with owner membership", async () => {
-    mocks.prisma.organization.create.mockResolvedValue({});
+    mocks.prisma.user.update.mockReturnValue({ user: true });
+    mocks.prisma.organization.create.mockReturnValue({ organization: true });
+    mocks.prisma.$transaction.mockResolvedValue([{ user: true }, { organization: true }]);
 
     await createOrganizationForUser({
       name: "Athenemy Studio",
@@ -62,6 +65,14 @@ describe("organizations", () => {
         memberships: { create: { userId: "user_1", role: "OWNER" } },
       }),
     });
+    expect(mocks.prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user_1" },
+      data: { role: "ADMIN" },
+    });
+    expect(mocks.prisma.$transaction).toHaveBeenCalledWith([
+      { user: true },
+      { organization: true },
+    ]);
   });
 
   it("accepts pending invitations for matching users", async () => {

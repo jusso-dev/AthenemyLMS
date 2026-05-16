@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Clock, PlayCircle } from "lucide-react";
+import { Clock, LibraryBig, PlayCircle } from "lucide-react";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getCourseBySlug } from "@/lib/course-data";
 import { formatPrice } from "@/lib/utils";
 
@@ -17,6 +18,10 @@ export default async function CourseDetailPage({
   const { slug } = await params;
   const course = await getCourseBySlug(slug);
   if (!course) notFound();
+  const lessonCount = course.sections.reduce(
+    (total, section) => total + section.lessons.length,
+    0,
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,9 +43,10 @@ export default async function CourseDetailPage({
                   <Clock className="h-4 w-4" />
                   {Math.round(course.durationMinutes / 60)} hours
                 </span>
+                <span>{lessonCount} lessons</span>
               </div>
             </div>
-            <Card>
+            <Card className="h-fit lg:sticky lg:top-24">
               <CardHeader>
                 <CardTitle className="text-3xl">
                   {formatPrice(course.priceCents, course.currency)}
@@ -62,6 +68,13 @@ export default async function CourseDetailPage({
         <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
           <h2 className="text-2xl font-semibold">Curriculum</h2>
           <div className="mt-6 space-y-4">
+            {course.sections.length === 0 ? (
+              <EmptyState
+                icon={LibraryBig}
+                title="Curriculum coming soon"
+                description="The course is published, but lesson details have not been added yet."
+              />
+            ) : null}
             {course.sections.map((section) => (
               <Card key={section.title}>
                 <CardHeader>

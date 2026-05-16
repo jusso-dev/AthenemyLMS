@@ -1,12 +1,19 @@
 import Link from "next/link";
-import { GripVertical, Plus } from "lucide-react";
+import { BookOpen, GripVertical, Plus } from "lucide-react";
+import { CourseManagementNav } from "@/components/courses/course-management-nav";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  createLessonAction,
-  createSectionAction,
+  createLessonFormAction,
+  createSectionFormAction,
 } from "@/app/dashboard/courses/actions";
 import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getEditableCourse } from "@/lib/dashboard-data";
@@ -24,20 +31,19 @@ export default async function CurriculumPage({
   return (
     <div className="space-y-6">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Curriculum</h1>
-          <p className="mt-2 text-muted-foreground">
-            Reorder sections and lessons, add content, attach video URLs, and
-            upload resources.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href={`/dashboard/courses/${courseId}/assessments`}>
-            Assessments
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow={course?.title}
+        title="Curriculum"
+        description="Build the course map learners will follow: sections, lessons, video, notes, and supporting resources."
+        actions={
+          <Button asChild variant="outline">
+            <Link href={`/dashboard/courses/${courseId}/assessments`}>
+              Assessments
+            </Link>
+          </Button>
+        }
+      />
+      <CourseManagementNav courseId={courseId} />
       {mode === "permission" || !course ? (
         <Card>
           <CardContent className="pt-6">
@@ -53,21 +59,26 @@ export default async function CurriculumPage({
             <CardTitle>Add section</CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={createSectionAction.bind(null, course.id)} className="flex max-w-xl gap-2">
+            <ActionForm
+              action={createSectionFormAction.bind(null, course.id)}
+              className="flex max-w-xl gap-2"
+            >
               <Input name="title" placeholder="Section title" required />
-              <Button type="submit">
+              <PendingSubmitButton pendingLabel="Adding...">
                 <Plus className="h-4 w-4" />
                 Add
-              </Button>
-            </form>
+              </PendingSubmitButton>
+            </ActionForm>
           </CardContent>
         </Card>
       ) : null}
       <div className="space-y-4">
         {course?.sections.length === 0 ? (
-          <p className="rounded-md border p-4 text-sm text-muted-foreground">
-            This course does not have any sections yet.
-          </p>
+          <EmptyState
+            icon={BookOpen}
+            title="No sections yet"
+            description="Add the first section to create the spine of this course. Each section can hold lessons, videos, notes, and resources."
+          />
         ) : null}
         {course?.sections.map((section, sectionIndex) => (
           <Card key={section.title}>
@@ -91,12 +102,16 @@ export default async function CurriculumPage({
                   </div>
                   <div className="flex gap-2">
                     <Button asChild size="sm" variant="outline">
-                      <Link href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/edit`}>
+                      <Link
+                        href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/edit`}
+                      >
                         Edit lesson
                       </Link>
                     </Button>
                     <Button asChild size="sm" variant="outline">
-                      <Link href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/video`}>
+                      <Link
+                        href={`/dashboard/courses/${courseId}/lessons/${lesson.id}/video`}
+                      >
                         Video
                       </Link>
                     </Button>
@@ -104,23 +119,31 @@ export default async function CurriculumPage({
                 </div>
               ))}
               {mode === "database" && "id" in section ? (
-                <form
-                  action={createLessonAction.bind(null, section.id)}
+                <ActionForm
+                  action={createLessonFormAction.bind(null, section.id)}
                   className="mt-4 grid gap-3 rounded-md border bg-muted/30 p-3 md:grid-cols-[1fr_1fr_120px_auto]"
                 >
                   <Input name="title" placeholder="Lesson title" required />
                   <Input name="videoUrl" placeholder="Video URL" />
-                  <Input name="durationMinutes" type="number" min="0" placeholder="Minutes" />
-                  <Button type="submit" variant="outline">
+                  <Input
+                    name="durationMinutes"
+                    type="number"
+                    min="0"
+                    placeholder="Minutes"
+                  />
+                  <PendingSubmitButton
+                    variant="outline"
+                    pendingLabel="Adding..."
+                  >
                     <Plus className="h-4 w-4" />
                     Lesson
-                  </Button>
+                  </PendingSubmitButton>
                   <Textarea
                     name="content"
                     placeholder="Lesson notes"
                     className="md:col-span-4"
                   />
-                </form>
+                </ActionForm>
               ) : null}
             </CardContent>
           </Card>

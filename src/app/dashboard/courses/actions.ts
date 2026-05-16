@@ -19,10 +19,149 @@ import { issueCertificate } from "@/lib/certificates";
 import { sendCoursePublishedEmail } from "@/lib/email";
 import { parseQuizOptions, scoreQuiz } from "@/lib/assessments";
 import { slugify } from "@/lib/utils";
+import {
+  actionError,
+  actionSuccess,
+  formatActionError,
+  type ActionFormState,
+} from "@/lib/action-state";
+
+export type CourseFormState = ActionFormState;
 
 export async function createCourseAction(formData: FormData) {
-  assertDatabaseConfigured();
+  let courseId: string;
 
+  try {
+    assertDatabaseConfigured();
+    const course = await createCourse(formData);
+    courseId = course.id;
+  } catch (error) {
+    return redirect(
+      `/dashboard/courses/new?error=${encodeURIComponent(formatActionError(error))}`,
+    );
+  }
+
+  revalidatePath("/dashboard/courses");
+  redirect(`/dashboard/courses/${courseId}/edit`);
+}
+
+export async function createCourseFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+): Promise<ActionFormState> {
+  let courseId: string;
+
+  try {
+    assertDatabaseConfigured();
+    const course = await createCourse(formData);
+    courseId = course.id;
+  } catch (error) {
+    return actionError(error);
+  }
+
+  revalidatePath("/dashboard/courses");
+  redirect(`/dashboard/courses/${courseId}/edit`);
+}
+
+export async function updateCourseFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => updateCourseAction(courseId, formData),
+    "Course details saved.",
+  );
+}
+
+export async function createSectionFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => createSectionAction(courseId, formData),
+    "Section added.",
+  );
+}
+
+export async function createLessonFormAction(
+  sectionId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => createLessonAction(sectionId, formData),
+    "Lesson added.",
+  );
+}
+
+export async function updateLessonContentFormAction(
+  courseId: string,
+  lessonId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => updateLessonContentAction(courseId, lessonId, formData),
+    "Lesson saved.",
+  );
+}
+
+export async function updateLessonVideoFormAction(
+  courseId: string,
+  lessonId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => updateLessonVideoAction(courseId, lessonId, formData),
+    "Video settings saved.",
+  );
+}
+
+export async function createAssessmentFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => createAssessmentAction(courseId, formData),
+    "Assessment created.",
+  );
+}
+
+export async function submitAssessmentFormAction(
+  courseId: string,
+  assessmentId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => submitAssessmentAction(courseId, assessmentId, formData),
+    "Assessment submitted.",
+  );
+}
+
+export async function updateProfileFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(() => updateProfileAction(formData), "Profile saved.");
+}
+
+export async function markLessonCompleteFormAction(
+  lessonId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => markLessonCompleteAction(lessonId, formData),
+    "Lesson progress updated.",
+  );
+}
+
+async function createCourse(formData: FormData) {
   const user = await requireAppUser();
   if (!hasRole(user.role, "INSTRUCTOR")) {
     throw new Error("Instructor or admin role required.");
@@ -55,8 +194,7 @@ export async function createCourseAction(formData: FormData) {
     });
   }
 
-  revalidatePath("/dashboard/courses");
-  redirect(`/dashboard/courses/${course.id}/edit`);
+  return course;
 }
 
 export async function issueCertificateAction(courseId: string) {
@@ -65,6 +203,27 @@ export async function issueCertificateAction(courseId: string) {
   const user = await requireAppUser();
   const certificate = await issueCertificate(user.id, courseId);
   redirect(`/certificates/${certificate.certificateNumber}`);
+}
+
+export async function issueCertificateFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _previousState;
+  void _formData;
+  let certificateNumber: string;
+
+  try {
+    assertDatabaseConfigured();
+    const user = await requireAppUser();
+    const certificate = await issueCertificate(user.id, courseId);
+    certificateNumber = certificate.certificateNumber;
+  } catch (error) {
+    return actionError(error);
+  }
+
+  redirect(`/certificates/${certificateNumber}`);
 }
 
 export async function updateCourseAction(courseId: string, formData: FormData) {
@@ -102,7 +261,10 @@ export async function updateCourseAction(courseId: string, formData: FormData) {
   revalidatePath(`/dashboard/courses/${courseId}/edit`);
 }
 
-export async function createSectionAction(courseId: string, formData: FormData) {
+export async function createSectionAction(
+  courseId: string,
+  formData: FormData,
+) {
   assertDatabaseConfigured();
 
   const user = await requireAppUser();
@@ -126,7 +288,10 @@ export async function createSectionAction(courseId: string, formData: FormData) 
   revalidatePath(`/dashboard/courses/${courseId}/curriculum`);
 }
 
-export async function createLessonAction(sectionId: string, formData: FormData) {
+export async function createLessonAction(
+  sectionId: string,
+  formData: FormData,
+) {
   assertDatabaseConfigured();
 
   const user = await requireAppUser();
@@ -242,7 +407,10 @@ export async function updateLessonVideoAction(
   revalidatePath(`/dashboard/learn/${courseId}/lessons/${lessonId}`);
 }
 
-export async function createAssessmentAction(courseId: string, formData: FormData) {
+export async function createAssessmentAction(
+  courseId: string,
+  formData: FormData,
+) {
   assertDatabaseConfigured();
 
   const user = await requireAppUser();
@@ -343,7 +511,11 @@ export async function updateProfileAction(formData: FormData) {
   revalidatePath("/dashboard/settings");
 }
 
-export async function markLessonCompleteAction(lessonId: string) {
+export async function markLessonCompleteAction(
+  lessonId: string,
+  _formData?: FormData,
+) {
+  void _formData;
   assertDatabaseConfigured();
 
   const user = await requireAppUser();
@@ -381,11 +553,27 @@ export async function markLessonCompleteAction(lessonId: string) {
   });
 
   revalidatePath(`/dashboard/learn/${lesson.section.courseId}`);
-  revalidatePath(`/dashboard/learn/${lesson.section.courseId}/lessons/${lessonId}`);
+  revalidatePath(
+    `/dashboard/learn/${lesson.section.courseId}/lessons/${lessonId}`,
+  );
 }
 
 function assertDatabaseConfigured() {
   if (missingEnv(["DATABASE_URL"]).length > 0) {
-    throw new Error("Supabase is not configured. Add DATABASE_URL to .env.local.");
+    throw new Error(
+      "Supabase is not configured. Add DATABASE_URL to .env.local.",
+    );
+  }
+}
+
+async function runAction(
+  operation: () => Promise<void>,
+  successMessage: string,
+): Promise<ActionFormState> {
+  try {
+    await operation();
+    return actionSuccess(successMessage);
+  } catch (error) {
+    return actionError(error);
   }
 }

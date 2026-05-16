@@ -30,11 +30,19 @@ export const lessonSchema = z.object({
 });
 
 export const lessonContentSchema = lessonSchema.extend({
-  content: z.string().max(20000, "Lesson content must stay under 20,000 characters").optional().or(z.literal("")),
+  content: z
+    .string()
+    .max(20000, "Lesson content must stay under 20,000 characters")
+    .optional()
+    .or(z.literal("")),
 });
 
 export const lessonVideoSchema = z.object({
-  videoUrl: z.string().url("Use a valid video URL").optional().or(z.literal("")),
+  videoUrl: z
+    .string()
+    .url("Use a valid video URL")
+    .optional()
+    .or(z.literal("")),
   videoProvider: z.enum(["EXTERNAL", "R2"]).default("EXTERNAL"),
   videoAssetKey: z.string().max(500).optional().or(z.literal("")),
   videoMimeType: z.string().max(120).optional().or(z.literal("")),
@@ -60,6 +68,19 @@ export const invitationSchema = z.object({
   organizationId: z.string().min(1),
   email: z.string().email(),
   role: z.enum(["ADMIN", "INSTRUCTOR", "MEMBER"]).default("MEMBER"),
+});
+
+export const organizationMemberSchema = z.object({
+  organizationId: z.string().min(1),
+  membershipId: z.string().min(1),
+  name: z.string().max(120).optional().or(z.literal("")),
+  appRole: z.enum(["STUDENT", "INSTRUCTOR", "ADMIN"]),
+  orgRole: z.enum(["OWNER", "ADMIN", "INSTRUCTOR", "MEMBER"]),
+});
+
+export const organizationMemberIdSchema = z.object({
+  organizationId: z.string().min(1),
+  membershipId: z.string().min(1),
 });
 
 export const sectionSchema = z.object({

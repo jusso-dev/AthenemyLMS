@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
-import { dashboardStats, mockCourses } from "@/lib/mock-data";
 import type { AppUser } from "@/lib/auth";
 import { canManageCourse, hasRole } from "@/lib/permissions";
 import { formatPrice } from "@/lib/utils";
@@ -32,16 +31,15 @@ export function databaseIsConfigured() {
 
 export function fallbackNotice() {
   return {
-    title: "Local setup mode",
+    title: "Supabase setup required",
     items: [
-      "Supabase is not configured or could not be reached, so this dashboard is showing explicit mock data.",
-      "Add DATABASE_URL and DIRECT_URL to .env.local, run migrations, and sign in with Clerk to use persisted data.",
+      "Add DATABASE_URL and DIRECT_URL to .env.local, then run migrations to use persisted data.",
     ],
   };
 }
 
 export async function getDashboardOverview(user: AppUser | null) {
-  if (!databaseIsConfigured()) return fallbackOverview();
+  if (!databaseIsConfigured()) return emptyOverview();
 
   try {
     const courseScope = scopeCoursesToUser(user);
@@ -49,32 +47,37 @@ export async function getDashboardOverview(user: AppUser | null) {
     startOfMonth.setUTCDate(1);
     startOfMonth.setUTCHours(0, 0, 0, 0);
 
-    const [activeEnrollments, publishedCourses, completedEnrollments, revenue, courses] =
-      await Promise.all([
-        prisma.enrollment.count({
-          where: { status: "ACTIVE", course: courseScope },
-        }),
-        prisma.course.count({
-          where: { status: "PUBLISHED", ...courseScope },
-        }),
-        prisma.enrollment.count({
-          where: { status: "COMPLETED", course: courseScope },
-        }),
-        prisma.payment.aggregate({
-          _sum: { amountCents: true },
-          where: {
-            status: "PAID",
-            createdAt: { gte: startOfMonth },
-            course: courseScope,
-          },
-        }),
-        prisma.course.findMany({
-          where: courseScope,
-          orderBy: { updatedAt: "desc" },
-          take: 5,
-          include: courseInclude,
-        }),
-      ]);
+    const [
+      activeEnrollments,
+      publishedCourses,
+      completedEnrollments,
+      revenue,
+      courses,
+    ] = await Promise.all([
+      prisma.enrollment.count({
+        where: { status: "ACTIVE", course: courseScope },
+      }),
+      prisma.course.count({
+        where: { status: "PUBLISHED", ...courseScope },
+      }),
+      prisma.enrollment.count({
+        where: { status: "COMPLETED", course: courseScope },
+      }),
+      prisma.payment.aggregate({
+        _sum: { amountCents: true },
+        where: {
+          status: "PAID",
+          createdAt: { gte: startOfMonth },
+          course: courseScope,
+        },
+      }),
+      prisma.course.findMany({
+        where: courseScope,
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+        include: courseInclude,
+      }),
+    ]);
 
     const enrollmentTotal = activeEnrollments + completedEnrollments;
     const completionRate =
@@ -103,16 +106,13 @@ export async function getDashboardOverview(user: AppUser | null) {
       })),
     };
   } catch {
-    return fallbackOverview();
+    return emptyOverview();
   }
 }
 
-export async function getManageCourses(
-  user: AppUser | null,
-  query?: string,
-) {
+export async function getManageCourses(user: AppUser | null, query?: string) {
   if (!databaseIsConfigured()) {
-    return { mode: "fallback" as DashboardMode, courses: filterMockCourses(query) };
+    return { mode: "fallback" as DashboardMode, courses: [] };
   }
 
   if (!hasRole(user?.role, "INSTRUCTOR")) {
@@ -137,14 +137,16 @@ export async function getManageCourses(
       }),
     };
   } catch {
-    return { mode: "fallback" as DashboardMode, courses: filterMockCourses(query) };
+    return { mode: "fallback" as DashboardMode, courses: [] };
   }
 }
 
-export async function getEditableCourse(user: AppUser | null, courseId: string) {
+export async function getEditableCourse(
+  user: AppUser | null,
+  courseId: string,
+) {
   if (!databaseIsConfigured()) {
-    const course = mockCourses.find((item) => item.id === courseId) ?? null;
-    return { mode: "fallback" as DashboardMode, course };
+    return { mode: "fallback" as DashboardMode, course: null };
   }
 
   const course = await prisma.course.findUnique({
@@ -161,7 +163,7 @@ export async function getEditableCourse(user: AppUser | null, courseId: string) 
 
 export async function getMyCourses(user: AppUser | null) {
   if (!databaseIsConfigured()) {
-    return { mode: "fallback" as DashboardMode, courses: mockCourses.slice(0, 2) };
+    return { mode: "fallback" as DashboardMode, courses: [] };
   }
 
   if (!user) return { mode: "permission" as DashboardMode, courses: [] };
@@ -178,14 +180,17 @@ export async function getMyCourses(user: AppUser | null) {
       courses: enrollments.map((enrollment) => enrollment.course),
     };
   } catch {
-    return { mode: "fallback" as DashboardMode, courses: mockCourses.slice(0, 2) };
+    return { mode: "fallback" as DashboardMode, courses: [] };
   }
 }
 
 export async function getLearnCourse(user: AppUser | null, courseId: string) {
   if (!databaseIsConfigured()) {
-    const course = mockCourses.find((item) => item.id === courseId) ?? null;
-    return { mode: "fallback" as DashboardMode, course, completedLessonIds: [] as string[] };
+    return {
+      mode: "fallback" as DashboardMode,
+      course: null,
+      completedLessonIds: [] as string[],
+    };
   }
 
   const course = await prisma.course.findUnique({
@@ -234,15 +239,14 @@ export async function getLearnCourse(user: AppUser | null, courseId: string) {
   };
 }
 
-export async function getCourseStudents(user: AppUser | null, courseId: string) {
+export async function getCourseStudents(
+  user: AppUser | null,
+  courseId: string,
+) {
   if (!databaseIsConfigured()) {
     return {
       mode: "fallback" as DashboardMode,
-      students: [
-        { name: "Amelia Chen", email: "amelia@example.com", progress: 86, status: "Active" },
-        { name: "Jon Bell", email: "jon@example.com", progress: 48, status: "Active" },
-        { name: "Priya Shah", email: "priya@example.com", progress: 100, status: "Completed" },
-      ],
+      students: [],
     };
   }
 
@@ -266,7 +270,9 @@ export async function getCourseStudents(user: AppUser | null, courseId: string) 
         where: {
           lessonId: { in: lessonIds },
           completedAt: { not: null },
-          userId: { in: course.enrollments.map((enrollment) => enrollment.userId) },
+          userId: {
+            in: course.enrollments.map((enrollment) => enrollment.userId),
+          },
         },
         select: { userId: true },
       })
@@ -294,17 +300,8 @@ export async function getAdminOverview(user: AppUser | null) {
   if (!databaseIsConfigured()) {
     return {
       mode: "fallback" as DashboardMode,
-      stats: [
-        { label: "Users", value: "312" },
-        { label: "Courses", value: "18" },
-        { label: "Enrollments", value: "1,024" },
-        { label: "Payments", value: "$42k" },
-      ],
-      users: [
-        { name: "Admin Owner", email: "admin.owner@example.com", role: "ADMIN" },
-        { name: "Instructor Demo", email: "instructor.demo@example.com", role: "INSTRUCTOR" },
-        { name: "Student Demo", email: "student.demo@example.com", role: "STUDENT" },
-      ],
+      stats: emptyAdminStats(),
+      users: [],
     };
   }
 
@@ -312,13 +309,17 @@ export async function getAdminOverview(user: AppUser | null) {
     return { mode: "permission" as DashboardMode, stats: [], users: [] };
   }
 
-  const [users, courses, enrollments, payments, recentUsers] = await Promise.all([
-    prisma.user.count(),
-    prisma.course.count(),
-    prisma.enrollment.count(),
-    prisma.payment.aggregate({ _sum: { amountCents: true }, where: { status: "PAID" } }),
-    prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
-  ]);
+  const [users, courses, enrollments, payments, recentUsers] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.course.count(),
+      prisma.enrollment.count(),
+      prisma.payment.aggregate({
+        _sum: { amountCents: true },
+        where: { status: "PAID" },
+      }),
+      prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
+    ]);
 
   return {
     mode: "database" as DashboardMode,
@@ -332,33 +333,34 @@ export async function getAdminOverview(user: AppUser | null) {
   };
 }
 
-function fallbackOverview() {
+function emptyOverview() {
   return {
     mode: "fallback" as DashboardMode,
-    stats: dashboardStats,
-    courses: mockCourses.map((course) => ({
-      id: course.id,
-      title: course.title,
-      instructor: course.instructor,
-      level: course.level,
-      status: course.status,
-      progress: course.priceCents === 0 ? 81 : 64,
-    })),
+    stats: emptyStats(),
+    courses: [],
   };
+}
+
+function emptyStats() {
+  return [
+    { label: "Active enrollments", value: "0" },
+    { label: "Published courses", value: "0" },
+    { label: "Completion rate", value: "0%" },
+    { label: "Revenue this month", value: formatPrice(0) },
+  ];
+}
+
+function emptyAdminStats() {
+  return [
+    { label: "Users", value: "0" },
+    { label: "Courses", value: "0" },
+    { label: "Enrollments", value: "0" },
+    { label: "Payments", value: formatPrice(0) },
+  ];
 }
 
 function scopeCoursesToUser(user: AppUser | null) {
   if (!user || user.role === "ADMIN") return {};
   if (user.role === "INSTRUCTOR") return { instructorId: user.id };
   return { enrollments: { some: { userId: user.id } } };
-}
-
-function filterMockCourses(query?: string) {
-  if (!query) return mockCourses;
-  const normalized = query.toLowerCase();
-  return mockCourses.filter((course) =>
-    [course.title, course.subtitle, course.description].some((value) =>
-      value.toLowerCase().includes(normalized),
-    ),
-  );
 }

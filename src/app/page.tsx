@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import {
   ArrowRight,
   BookOpen,
@@ -13,7 +15,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { dashboardStats, mockCourses } from "@/lib/mock-data";
+import { isClerkConfigured } from "@/lib/auth";
 
 const features = [
   {
@@ -38,7 +40,12 @@ const features = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  if (isClerkConfigured()) {
+    const { userId } = await auth();
+    if (userId) redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -85,30 +92,22 @@ export default function Home() {
                   <Sparkles className="h-5 w-5 text-[color:var(--gold)]" />
                 </div>
                 <div className="grid gap-3 py-4 sm:grid-cols-2">
-                  {dashboardStats.map((stat) => (
-                    <div key={stat.label} className="rounded-md border bg-card p-4">
-                      <p className="text-2xl font-semibold">{stat.value}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {stat.label}
-                      </p>
-                    </div>
-                  ))}
+                  <div className="rounded-md border bg-card p-4">
+                    <p className="text-2xl font-semibold">0</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Active enrollments
+                    </p>
+                  </div>
+                  <div className="rounded-md border bg-card p-4">
+                    <p className="text-2xl font-semibold">$0</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Revenue this month
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  {mockCourses.slice(0, 2).map((course) => (
-                    <div
-                      key={course.slug}
-                      className="flex items-center justify-between rounded-md border p-3"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{course.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {course.level} · {Math.round(course.durationMinutes / 60)}h
-                        </p>
-                      </div>
-                      <Badge variant="success">Published</Badge>
-                    </div>
-                  ))}
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  Published course activity appears here after your catalogue is
+                  connected.
                 </div>
               </div>
             </div>
@@ -144,20 +143,22 @@ export default function Home() {
 
         <section className="border-y bg-card">
           <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-3 lg:px-8">
-            {["Launch a catalogue", "Sell paid courses", "Track completion"].map(
-              (item) => (
-                <div key={item} className="flex gap-3">
-                  <CheckCircle2 className="mt-1 h-5 w-5 text-secondary" />
-                  <div>
-                    <h3 className="font-semibold">{item}</h3>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Use the included data model, dashboard routes, and API
-                      endpoints as a production-quality starting point.
-                    </p>
-                  </div>
+            {[
+              "Launch a catalogue",
+              "Sell paid courses",
+              "Track completion",
+            ].map((item) => (
+              <div key={item} className="flex gap-3">
+                <CheckCircle2 className="mt-1 h-5 w-5 text-secondary" />
+                <div>
+                  <h3 className="font-semibold">{item}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Use the included data model, dashboard routes, and API
+                    endpoints as a production-quality starting point.
+                  </p>
                 </div>
-              ),
-            )}
+              </div>
+            ))}
           </div>
         </section>
       </main>

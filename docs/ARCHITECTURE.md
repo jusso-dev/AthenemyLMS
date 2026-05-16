@@ -6,7 +6,7 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 
 - `src/app`: public pages, dashboard pages, and API routes.
 - `src/components`: brand, layout, forms, and reusable UI primitives.
-- `src/lib`: env validation, auth helpers, permissions, service clients, schemas, mock data, and utilities.
+- `src/lib`: env validation, auth helpers, permissions, service clients, schemas, and utilities.
 - `prisma/schema.prisma`: LMS domain model for users, courses, lessons, resources, enrollments, progress, and payments.
 
 ## Lesson Authoring
@@ -35,7 +35,7 @@ Courses can include quiz assessments with persisted questions and submissions. R
 
 ## Local Fallbacks
 
-When env vars are missing, public pages and dashboard previews use mock course data. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.
+When env vars are missing, public pages and dashboard previews use empty persisted-data states. API routes return actionable setup errors for missing Stripe, R2, Clerk, or database configuration.
 
 ## Course Portability
 
@@ -49,4 +49,4 @@ Tenant data is stored in Prisma using organisations, memberships, and invitation
 
 Completed enrollments can issue one certificate per learner/course when `Course.certificatesEnabled` is true. Public certificate verification uses the certificate number and exposes only course, issuer, and issue date metadata, not private learner profile data.
 
-Dashboard management pages read through `src/lib/dashboard-data.ts`. That layer uses Prisma when `DATABASE_URL` is configured and falls back to explicit mock data only for local setup or database connection failure states. Mutating dashboard operations live in `src/app/dashboard/courses/actions.ts`; they require a signed-in Clerk-backed user, validate form payloads with Zod, and check instructor/admin ownership before writing to Prisma.
+Dashboard management pages read through `src/lib/dashboard-data.ts`. That layer uses Prisma when `DATABASE_URL` is configured and returns empty setup states when persisted data is unavailable. Mutating dashboard operations live in `src/app/dashboard/courses/actions.ts`; they require a signed-in Clerk-backed user, validate form payloads with Zod, and check instructor/admin ownership before writing to Prisma.

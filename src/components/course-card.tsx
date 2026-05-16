@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Clock, GraduationCap } from "lucide-react";
+import { BookOpen, Clock, GraduationCap, Layers3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,10 +15,17 @@ type CourseCardProps = {
     level?: string;
     durationMinutes?: number;
     instructor?: { name?: string | null } | null;
+    sections?: { lessons?: unknown[] }[];
   };
 };
 
 export function CourseCard({ course }: CourseCardProps) {
+  const lessonCount =
+    course.sections?.reduce(
+      (total, section) => total + (section.lessons?.length ?? 0),
+      0,
+    ) ?? 0;
+
   return (
     <Card className="flex h-full flex-col overflow-hidden">
       <div className="h-32 bg-[linear-gradient(135deg,var(--primary),var(--secondary))] p-5 text-primary-foreground">
@@ -47,7 +54,11 @@ export function CourseCard({ course }: CourseCardProps) {
           </span>
           <span className="inline-flex items-center gap-1">
             <GraduationCap className="h-3.5 w-3.5" aria-hidden="true" />
-            Structured
+            {lessonCount > 0 ? `${lessonCount} lessons` : "Structured"}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
+            {course.sections?.length ?? 0} sections
           </span>
         </div>
         <Button asChild variant="outline" className="w-full">

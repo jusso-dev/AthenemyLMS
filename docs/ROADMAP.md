@@ -9,10 +9,10 @@
 - Certificates: generate course completion certificates.
 - Organisation tenancy: add teams, invitations, and organisation-scoped roles.
 - Billing portal: add Stripe customer portal support.
-- Analytics hardening: replace mock summaries with persisted rollups.
+- Analytics hardening: expand persisted rollups and reporting coverage.
 - Accessibility audit: run keyboard, screen reader, contrast, and reduced-motion checks.
 - Import/export: support course backup and migration between self-hosted installs.
 
 ## MVP Gaps
 
-The current MVP establishes routes, schema, setup docs, and integration seams. Some management screens use mock data until Supabase is configured and the next persistence pass connects every form to Prisma mutations.
+The current MVP establishes routes, schema, setup docs, and integration seams. Management screens now use persisted data surfaces and empty setup states until Supabase is configured.

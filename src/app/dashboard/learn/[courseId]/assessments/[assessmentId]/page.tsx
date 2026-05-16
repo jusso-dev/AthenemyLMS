@@ -3,11 +3,15 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
 import { SetupMessage } from "@/lib/setup-message";
 import { missingEnv } from "@/lib/env";
 import { getCurrentAppUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { submitAssessmentAction } from "@/app/dashboard/courses/actions";
+import { submitAssessmentFormAction } from "@/app/dashboard/courses/actions";
 
 export default async function TakeAssessmentPage({
   params,
@@ -47,7 +51,9 @@ export default async function TakeAssessmentPage({
       {databaseMissing ? (
         <SetupMessage
           title="Supabase setup required"
-          items={["Assessment submissions require DATABASE_URL and DIRECT_URL."]}
+          items={[
+            "Assessment submissions require DATABASE_URL and DIRECT_URL.",
+          ]}
         />
       ) : null}
       <Card>
@@ -57,7 +63,8 @@ export default async function TakeAssessmentPage({
         <CardContent className="space-y-5">
           {latest ? (
             <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              Latest score: {latest.score}% · {latest.passed ? "Passed" : "Not passed"}
+              Latest score: {latest.score}% ·{" "}
+              {latest.passed ? "Passed" : "Not passed"}
             </p>
           ) : null}
           {!user && !databaseMissing ? (
@@ -65,7 +72,14 @@ export default async function TakeAssessmentPage({
               Sign in to submit this assessment.
             </p>
           ) : null}
-          <form action={submitAssessmentAction.bind(null, courseId, assessmentId)} className="space-y-5">
+          <ActionForm
+            action={submitAssessmentFormAction.bind(
+              null,
+              courseId,
+              assessmentId,
+            )}
+            className="space-y-5"
+          >
             {assessment?.questions.map((question, questionIndex) => {
               const options = Array.isArray(question.options)
                 ? (question.options as string[])
@@ -77,7 +91,10 @@ export default async function TakeAssessmentPage({
                   </legend>
                   <div className="mt-3 space-y-2">
                     {options.map((option, optionIndex) => (
-                      <label key={option} className="flex items-center gap-2 text-sm">
+                      <label
+                        key={option}
+                        className="flex items-center gap-2 text-sm"
+                      >
                         <input
                           type="radio"
                           name={`question-${question.id}`}
@@ -92,8 +109,13 @@ export default async function TakeAssessmentPage({
                 </fieldset>
               );
             })}
-            <Button disabled={!user || databaseMissing}>Submit assessment</Button>
-          </form>
+            <PendingSubmitButton
+              disabled={!user || databaseMissing}
+              pendingLabel="Submitting..."
+            >
+              Submit assessment
+            </PendingSubmitButton>
+          </ActionForm>
         </CardContent>
       </Card>
     </div>

@@ -3,9 +3,14 @@
 import { useMemo, useRef, useState } from "react";
 import { Bold, Eye, Heading2, Italic, Link, List } from "lucide-react";
 import { LessonMarkdown } from "@/lib/lesson-markdown";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { ActionFormState } from "@/lib/action-state";
 
 type RichLessonEditorDefaults = {
   title: string;
@@ -21,7 +26,10 @@ export function RichLessonEditor({
   defaults,
   disabled = false,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (
+    previousState: ActionFormState,
+    formData: FormData,
+  ) => ActionFormState | Promise<ActionFormState>;
   defaults: RichLessonEditorDefaults;
   disabled?: boolean;
 }) {
@@ -41,7 +49,10 @@ export function RichLessonEditor({
     setContent(next);
     requestAnimationFrame(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+      textarea.setSelectionRange(
+        start + before.length,
+        start + before.length + selected.length,
+      );
     });
   }
 
@@ -56,13 +67,18 @@ export function RichLessonEditor({
   }
 
   return (
-    <form action={action} className="grid gap-5">
+    <ActionForm action={action} className="grid gap-5">
       <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="title">
             Lesson title
           </label>
-          <Input id="title" name="title" defaultValue={defaults.title} disabled={disabled} />
+          <Input
+            id="title"
+            name="title"
+            defaultValue={defaults.title}
+            disabled={disabled}
+          />
         </div>
         <div className="grid gap-2">
           <label className="text-sm font-medium" htmlFor="durationMinutes">
@@ -82,7 +98,12 @@ export function RichLessonEditor({
         <label className="text-sm font-medium" htmlFor="slug">
           Slug
         </label>
-        <Input id="slug" name="slug" defaultValue={defaults.slug} disabled={disabled} />
+        <Input
+          id="slug"
+          name="slug"
+          defaultValue={defaults.slug}
+          disabled={disabled}
+        />
       </div>
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="videoUrl">
@@ -97,27 +118,62 @@ export function RichLessonEditor({
         />
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => insertLine("## ")}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => insertLine("## ")}
+        >
           <Heading2 className="h-4 w-4" />
           Heading
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => wrapSelection("**")}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => wrapSelection("**")}
+        >
           <Bold className="h-4 w-4" />
           Bold
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => wrapSelection("_")}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => wrapSelection("_")}
+        >
           <Italic className="h-4 w-4" />
           Italic
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => insertLine("- ")}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => insertLine("- ")}
+        >
           <List className="h-4 w-4" />
           List
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => wrapSelection("[", "](https://)")}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => wrapSelection("[", "](https://)")}
+        >
           <Link className="h-4 w-4" />
           Link
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => setShowPreview((value) => !value)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setShowPreview((value) => !value)}
+        >
           <Eye className="h-4 w-4" />
           Preview
         </Button>
@@ -153,9 +209,9 @@ export function RichLessonEditor({
         />
         Allow preview before enrollment
       </label>
-      <Button type="submit" className="w-fit" disabled={disabled}>
+      <PendingSubmitButton className="w-fit" disabled={disabled}>
         Save lesson
-      </Button>
-    </form>
+      </PendingSubmitButton>
+    </ActionForm>
   );
 }

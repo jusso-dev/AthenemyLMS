@@ -9,7 +9,7 @@ import { missingEnv } from "@/lib/env";
 import { getCurrentAppUser } from "@/lib/auth";
 import { canManageCourse } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { updateLessonContentAction } from "@/app/dashboard/courses/actions";
+import { updateLessonContentFormAction } from "@/app/dashboard/courses/actions";
 
 export default async function EditLessonPage({
   params,
@@ -39,7 +39,9 @@ export default async function EditLessonPage({
               Curriculum
             </Link>
           </Button>
-          <h1 className="text-3xl font-semibold tracking-tight">Lesson editor</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Lesson editor
+          </h1>
           <p className="mt-2 text-muted-foreground">
             Write Markdown content and preview the learner-facing lesson body.
           </p>
@@ -65,7 +67,11 @@ export default async function EditLessonPage({
             </p>
           ) : (
             <RichLessonEditor
-              action={updateLessonContentAction.bind(null, courseId, lessonId)}
+              action={updateLessonContentFormAction.bind(
+                null,
+                courseId,
+                lessonId,
+              )}
               disabled={databaseMissing || !allowed}
               defaults={{
                 title: lesson?.title ?? "",

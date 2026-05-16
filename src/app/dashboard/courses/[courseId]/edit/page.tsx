@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { CourseManagementNav } from "@/components/courses/course-management-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CourseForm } from "@/components/forms/course-form";
-import { updateCourseAction } from "@/app/dashboard/courses/actions";
+import { PageHeader } from "@/components/layout/page-header";
+import { updateCourseFormAction } from "@/app/dashboard/courses/actions";
 import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getEditableCourse } from "@/lib/dashboard-data";
 import { SetupMessage } from "@/lib/setup-message";
@@ -19,29 +19,17 @@ export default async function EditCoursePage({
   if (!course && mode !== "permission") notFound();
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-5xl space-y-6">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Edit course</h1>
-          <p className="mt-2 text-muted-foreground">
-            {course?.title ?? "Permission required"}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link href={`/dashboard/courses/${courseId}/curriculum`}>
-              Curriculum
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href={`/dashboard/courses/${courseId}/students`}>Students</Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={course?.title ?? "Permission required"}
+        title="Course details"
+        description="Set the public listing, pricing, publication state, and certificate behavior."
+      />
+      <CourseManagementNav courseId={courseId} />
       <Card>
         <CardHeader>
-          <CardTitle>Course details</CardTitle>
+          <CardTitle>Listing and publishing</CardTitle>
         </CardHeader>
         <CardContent>
           {mode === "permission" || !course ? (
@@ -50,7 +38,7 @@ export default async function EditCoursePage({
             </p>
           ) : (
             <CourseForm
-              action={updateCourseAction.bind(null, course.id)}
+              stateAction={updateCourseFormAction.bind(null, course.id)}
               disabled={mode === "fallback"}
               defaults={{
                 title: course.title,
@@ -62,7 +50,11 @@ export default async function EditCoursePage({
                 thumbnailUrl:
                   "thumbnailUrl" in course ? (course.thumbnailUrl ?? "") : "",
               }}
-              submitLabel={mode === "fallback" ? "Configure Supabase to save" : "Save course"}
+              submitLabel={
+                mode === "fallback"
+                  ? "Configure Supabase to save"
+                  : "Save course"
+              }
             />
           )}
         </CardContent>

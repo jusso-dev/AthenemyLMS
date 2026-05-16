@@ -1,8 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, CircleDollarSign, GraduationCap, Users } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  CircleDollarSign,
+  GraduationCap,
+  LibraryBig,
+  Users,
+} from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Progress } from "@/components/ui/progress";
 import { getCurrentAppUser, isClerkConfigured } from "@/lib/auth";
 import { SetupMessage } from "@/lib/setup-message";
 import {
@@ -20,22 +30,23 @@ export default async function DashboardPage() {
         <SetupMessage {...analyticsFallbackNotice()} />
       ) : null}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">
+      <PageHeader
+        eyebrow={
+          <>
             {user ? `Signed in as ${user.email}` : "Development preview"}
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            Dashboard
-          </h1>
-        </div>
-        <Button asChild>
-          <Link href="/dashboard/courses/new">
-            Create course
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
-      </div>
+          </>
+        }
+        title="Dashboard"
+        description="A single operating view for courses, learner activity, revenue, and the next work that needs attention."
+        actions={
+          <Button asChild>
+            <Link href="/dashboard/courses/new">
+              Create course
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {analytics.stats.map((stat) => (
@@ -64,9 +75,16 @@ export default async function DashboardPage() {
               </p>
             ) : null}
             {analytics.mode !== "permission" && analytics.courses.length === 0 ? (
-              <p className="rounded-md border p-4 text-sm text-muted-foreground">
-                No analytics have been recorded yet.
-              </p>
+              <EmptyState
+                icon={LibraryBig}
+                title="No course activity yet"
+                description="Publish a course and enroll learners to start seeing progress, completions, and revenue here."
+                action={
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/dashboard/courses/new">Create course</Link>
+                  </Button>
+                }
+              />
             ) : null}
             {analytics.courses.map((course) => (
               <div key={course.id} className="rounded-md border p-4">
@@ -84,12 +102,7 @@ export default async function DashboardPage() {
                     {course.status}
                   </Badge>
                 </div>
-                <div className="mt-4 h-2 rounded-full bg-muted">
-                  <div
-                    className="h-2 rounded-full bg-secondary"
-                    style={{ width: `${course.progressScore}%` }}
-                  />
-                </div>
+                <Progress value={course.progressScore} className="mt-4" />
               </div>
             ))}
           </CardContent>

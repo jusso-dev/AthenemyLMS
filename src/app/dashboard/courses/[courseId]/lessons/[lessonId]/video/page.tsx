@@ -9,7 +9,7 @@ import { missingEnv } from "@/lib/env";
 import { getCurrentAppUser } from "@/lib/auth";
 import { canManageCourse } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { updateLessonVideoAction } from "@/app/dashboard/courses/actions";
+import { updateLessonVideoFormAction } from "@/app/dashboard/courses/actions";
 import { formatVideoBytes, getVideoPlayback } from "@/lib/video";
 
 export default async function LessonVideoPage({
@@ -61,11 +61,16 @@ export default async function LessonVideoPage({
         <CardContent>
           {!databaseMissing && !allowed ? (
             <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              Instructor or admin access is required to manage this lesson video.
+              Instructor or admin access is required to manage this lesson
+              video.
             </p>
           ) : (
             <LessonVideoForm
-              action={updateLessonVideoAction.bind(null, courseId, lessonId)}
+              action={updateLessonVideoFormAction.bind(
+                null,
+                courseId,
+                lessonId,
+              )}
               disabled={databaseMissing || !allowed}
               defaults={{
                 videoUrl: lesson?.videoUrl ?? "",
@@ -85,10 +90,15 @@ export default async function LessonVideoPage({
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {lesson?.videoProvider ?? "EXTERNAL"} · {formatVideoBytes(lesson?.videoBytes)}
+              {lesson?.videoProvider ?? "EXTERNAL"} ·{" "}
+              {formatVideoBytes(lesson?.videoBytes)}
             </p>
             {playback.kind === "video" ? (
-              <video controls className="aspect-video w-full rounded-md border bg-black" src={playback.src} />
+              <video
+                controls
+                className="aspect-video w-full rounded-md border bg-black"
+                src={playback.src}
+              />
             ) : (
               <iframe
                 className="aspect-video w-full rounded-md border"

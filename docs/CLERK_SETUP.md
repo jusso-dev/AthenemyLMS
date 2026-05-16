@@ -5,7 +5,7 @@
    - Sign in: `/sign-in`
    - Sign up: `/sign-up`
    - After sign in: `/dashboard`
-   - After sign up: `/dashboard`
+   - After sign up: `/onboarding/organization`
 3. Copy keys into `.env.local`:
 
 ```env

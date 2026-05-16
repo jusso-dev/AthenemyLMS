@@ -2,6 +2,7 @@ import { SignIn } from "@clerk/nextjs";
 import { SetupMessage } from "@/lib/setup-message";
 import { isClerkConfigured } from "@/lib/auth";
 import { Logo } from "@/components/brand/logo";
+import { env } from "@/lib/env";
 
 export default function SignInPage() {
   return (
@@ -11,7 +12,7 @@ export default function SignInPage() {
           <Logo />
         </div>
         {isClerkConfigured() ? (
-          <SignIn />
+          <SignIn forceRedirectUrl={env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL} />
         ) : (
           <SetupMessage
             title="Clerk setup required"

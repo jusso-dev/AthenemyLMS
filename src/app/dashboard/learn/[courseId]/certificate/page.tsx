@@ -1,11 +1,15 @@
 import { Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
 import { SetupMessage } from "@/lib/setup-message";
 import { missingEnv } from "@/lib/env";
 import { getCurrentAppUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { issueCertificateAction } from "@/app/dashboard/courses/actions";
+import { issueCertificateFormAction } from "@/app/dashboard/courses/actions";
 
 export default async function CourseCertificatePage({
   params,
@@ -34,7 +38,9 @@ export default async function CourseCertificatePage({
       {databaseMissing ? (
         <SetupMessage
           title="Supabase setup required"
-          items={["Course certificates require DATABASE_URL and completed enrollments."]}
+          items={[
+            "Course certificates require DATABASE_URL and completed enrollments.",
+          ]}
         />
       ) : null}
       <Card>
@@ -45,22 +51,27 @@ export default async function CourseCertificatePage({
         <CardContent className="space-y-4">
           {existing ? (
             <Button asChild>
-              <a href={`/certificates/${existing.certificateNumber}`}>View certificate</a>
+              <a href={`/certificates/${existing.certificateNumber}`}>
+                View certificate
+              </a>
             </Button>
           ) : null}
           {!existing ? (
-            <form action={issueCertificateAction.bind(null, courseId)}>
-              <Button
+            <ActionForm
+              action={issueCertificateFormAction.bind(null, courseId)}
+            >
+              <PendingSubmitButton
                 disabled={
                   databaseMissing ||
                   !user ||
                   enrollment?.status !== "COMPLETED" ||
                   enrollment.course.certificatesEnabled === false
                 }
+                pendingLabel="Issuing..."
               >
                 Issue certificate
-              </Button>
-            </form>
+              </PendingSubmitButton>
+            </ActionForm>
           ) : null}
           <p className="text-sm text-muted-foreground">
             Certificates are available after course completion when the

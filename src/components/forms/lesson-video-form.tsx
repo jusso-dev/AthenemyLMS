@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { Upload, Video } from "lucide-react";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { ActionFormState } from "@/lib/action-state";
 
 type VideoDefaults = {
   videoUrl: string;
@@ -18,7 +23,10 @@ export function LessonVideoForm({
   defaults,
   disabled = false,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (
+    previousState: ActionFormState,
+    formData: FormData,
+  ) => ActionFormState | Promise<ActionFormState>;
   defaults: VideoDefaults;
   disabled?: boolean;
 }) {
@@ -50,7 +58,12 @@ export function LessonVideoForm({
         key?: string;
         error?: string;
       };
-      if (!presign.ok || !upload.uploadUrl || !upload.publicUrl || !upload.key) {
+      if (
+        !presign.ok ||
+        !upload.uploadUrl ||
+        !upload.publicUrl ||
+        !upload.key
+      ) {
         throw new Error(upload.error ?? "Video upload could not be prepared.");
       }
 
@@ -68,14 +81,16 @@ export function LessonVideoForm({
       setVideoBytes(file.size);
       setMessage("Video uploaded. Save the lesson video to persist it.");
     } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : "Video upload failed.");
+      setMessage(
+        caught instanceof Error ? caught.message : "Video upload failed.",
+      );
     } finally {
       setUploading(false);
     }
   }
 
   return (
-    <form action={action} className="grid gap-5">
+    <ActionForm action={action} className="grid gap-5">
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="videoProvider">
           Video source
@@ -85,7 +100,9 @@ export function LessonVideoForm({
           name="videoProvider"
           value={provider}
           disabled={disabled}
-          onChange={(event) => setProvider(event.target.value as "EXTERNAL" | "R2")}
+          onChange={(event) =>
+            setProvider(event.target.value as "EXTERNAL" | "R2")
+          }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
           <option value="EXTERNAL">External URL</option>
@@ -121,17 +138,23 @@ export function LessonVideoForm({
           }}
         />
         <Button type="button" variant="outline" className="w-fit" disabled>
-          {uploading ? <Upload className="h-4 w-4 animate-pulse" /> : <Video className="h-4 w-4" />}
+          {uploading ? (
+            <Upload className="h-4 w-4 animate-pulse" />
+          ) : (
+            <Video className="h-4 w-4" />
+          )}
           {uploading ? "Uploading" : "Select a file above"}
         </Button>
-        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+        {message ? (
+          <p className="text-sm text-muted-foreground">{message}</p>
+        ) : null}
       </div>
       <input type="hidden" name="videoAssetKey" value={videoAssetKey} />
       <input type="hidden" name="videoMimeType" value={videoMimeType} />
       <input type="hidden" name="videoBytes" value={videoBytes} />
-      <Button type="submit" className="w-fit" disabled={disabled}>
+      <PendingSubmitButton className="w-fit" disabled={disabled}>
         Save video
-      </Button>
-    </form>
+      </PendingSubmitButton>
+    </ActionForm>
   );
 }

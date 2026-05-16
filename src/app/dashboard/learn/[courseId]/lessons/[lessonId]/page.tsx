@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Download } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { markLessonCompleteAction } from "@/app/dashboard/courses/actions";
+import { Progress } from "@/components/ui/progress";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
+import { markLessonCompleteFormAction } from "@/app/dashboard/courses/actions";
 import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getLearnCourse } from "@/lib/dashboard-data";
 import { LessonMarkdown } from "@/lib/lesson-markdown";
@@ -23,12 +28,27 @@ export default async function LessonPlayerPage({
 }) {
   const { courseId, lessonId } = await params;
   const user = await getCurrentAppUser();
-  const { mode, course, completedLessonIds } = await getLearnCourse(user, courseId);
+  const { mode, course, completedLessonIds } = await getLearnCourse(
+    user,
+    courseId,
+  );
   if (!course && mode !== "permission") notFound();
 
   const completedIds: string[] = completedLessonIds;
   const lessons = course?.sections.flatMap((section) => section.lessons) ?? [];
   const lesson = lessons.find((item) => item.id === lessonId) ?? lessons[0];
+  const activeLessonIndex = lesson
+    ? lessons.findIndex((item) => item.id === lesson.id)
+    : -1;
+  const previousLesson =
+    activeLessonIndex > 0 ? lessons[activeLessonIndex - 1] : null;
+  const nextLesson =
+    activeLessonIndex >= 0 && activeLessonIndex < lessons.length - 1
+      ? lessons[activeLessonIndex + 1]
+      : null;
+  const progressPercent = lessons.length
+    ? Math.round((completedIds.length / lessons.length) * 100)
+    : 0;
   const lessonContent =
     lesson && "content" in lesson && typeof lesson.content === "string"
       ? lesson.content
@@ -71,7 +91,7 @@ export default async function LessonPlayerPage({
         )}
         <Card>
           <CardHeader>
-            <CardTitle>Lesson notes</CardTitle>
+            <CardTitle>{lesson?.title ?? "Lesson notes"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
             {mode === "permission" ? (
@@ -82,12 +102,40 @@ export default async function LessonPlayerPage({
               <LessonMarkdown content={lessonContent} />
             )}
             {mode === "database" && lesson ? (
-              <form action={markLessonCompleteAction.bind(null, lesson.id)}>
-                <Button>
-                  <CheckCircle2 className="h-4 w-4" />
-                  {completedIds.includes(lesson.id) ? "Completed" : "Mark complete"}
-                </Button>
-              </form>
+              <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <ActionForm
+                  action={markLessonCompleteFormAction.bind(null, lesson.id)}
+                >
+                  <PendingSubmitButton pendingLabel="Updating...">
+                    <CheckCircle2 className="h-4 w-4" />
+                    {completedIds.includes(lesson.id)
+                      ? "Completed"
+                      : "Mark complete"}
+                  </PendingSubmitButton>
+                </ActionForm>
+                <div className="flex gap-2">
+                  {previousLesson ? (
+                    <Button asChild variant="outline">
+                      <Link
+                        href={`/dashboard/learn/${courseId}/lessons/${previousLesson.id}`}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Previous
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {nextLesson ? (
+                    <Button asChild>
+                      <Link
+                        href={`/dashboard/learn/${courseId}/lessons/${nextLesson.id}`}
+                      >
+                        Next lesson
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             ) : null}
           </CardContent>
         </Card>
@@ -95,16 +143,29 @@ export default async function LessonPlayerPage({
       <aside className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Course lessons</CardTitle>
+            <CardTitle>Course progress</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-4">
+            <div>
+              <Progress value={progressPercent} />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {completedIds.length} of {lessons.length} lessons complete
+              </p>
+            </div>
             {lessons.map((item) => (
               <Link
                 key={item.id}
                 href={`/dashboard/learn/${course?.id}/lessons/${item.id}`}
-                className="block rounded-md border p-3 text-sm hover:bg-muted"
+                aria-current={item.id === lesson?.id ? "page" : undefined}
+                className={[
+                  "flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted",
+                  item.id === lesson?.id ? "bg-muted text-foreground" : "",
+                ].join(" ")}
               >
-                {item.title}
+                <span>{item.title}</span>
+                {completedIds.includes(item.id) ? (
+                  <CheckCircle2 className="h-4 w-4 text-secondary" />
+                ) : null}
               </Link>
             ))}
           </CardContent>

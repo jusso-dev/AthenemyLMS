@@ -40,6 +40,8 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 
 import {
+  createCourseAction,
+  createCourseFormAction,
   createLessonAction,
   createSectionAction,
   markLessonCompleteAction,
@@ -108,6 +110,55 @@ describe("dashboard course actions", () => {
       "permission",
     );
     expect(mocks.prisma.courseSection.create).not.toHaveBeenCalled();
+  });
+
+  it("returns a form error instead of throwing when course creation is not allowed", async () => {
+    mocks.requireAppUser.mockResolvedValue({
+      id: "student_1",
+      role: "STUDENT",
+      clerkId: "clerk_student",
+      email: "student@example.com",
+      name: "Student",
+      imageUrl: null,
+    });
+
+    const formData = new FormData();
+    formData.set("title", "Course Design Foundations");
+    formData.set("slug", "course-design-foundations");
+    formData.set("subtitle", "Build learning paths");
+    formData.set("description", "A structured course");
+    formData.set("priceCents", "4900");
+    formData.set("status", "DRAFT");
+    formData.set("thumbnailUrl", "");
+
+    await expect(
+      createCourseFormAction({ status: "idle", message: null }, formData),
+    ).resolves.toEqual({
+      status: "error",
+      message: "Instructor or admin role required.",
+    });
+    expect(mocks.prisma.course.create).not.toHaveBeenCalled();
+  });
+
+  it("redirects back with a friendly error when direct course creation validation fails", async () => {
+    const formData = new FormData();
+    formData.set("title", "");
+    formData.set("slug", "");
+    formData.set("subtitle", "");
+    formData.set("description", "");
+    formData.set("priceCents", "0");
+    formData.set("status", "DRAFT");
+    formData.set("thumbnailUrl", "");
+
+    await createCourseAction(formData);
+
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      expect.stringContaining("/dashboard/courses/new?error="),
+    );
+    expect(decodeURIComponent(mocks.redirect.mock.calls[0][0])).toContain(
+      "Use at least 3 characters",
+    );
+    expect(mocks.prisma.course.create).not.toHaveBeenCalled();
   });
 
   it("creates lessons with a generated slug and next section position", async () => {

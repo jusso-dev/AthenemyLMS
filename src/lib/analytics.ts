@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
-import { dashboardStats, mockCourses } from "@/lib/mock-data";
 import { hasRole } from "@/lib/permissions";
 import { formatPrice } from "@/lib/utils";
 import type { AppUser } from "@/lib/auth";
@@ -55,10 +54,9 @@ type ProgressRow = {
 
 export function analyticsFallbackNotice() {
   return {
-    title: "Local setup mode",
+    title: "Supabase setup required",
     items: [
-      "Analytics are using explicit mock data until Supabase is configured.",
-      "Run the analytics migration and add DATABASE_URL to .env.local to read persisted rollups.",
+      "Add DATABASE_URL to .env.local and run migrations to read persisted analytics.",
     ],
   };
 }
@@ -79,7 +77,9 @@ export function summarizeCourseMetrics(
   const paymentsByCourse = new Map(
     payments.map((row) => [row.courseId, row.revenueCents]),
   );
-  const lessonCourse = new Map(lessons.map((lesson) => [lesson.id, lesson.courseId]));
+  const lessonCourse = new Map(
+    lessons.map((lesson) => [lesson.id, lesson.courseId]),
+  );
   const lessonCounts = new Map<string, number>();
   for (const row of progress) {
     const courseId = lessonCourse.get(row.lessonId);
@@ -156,14 +156,17 @@ export function summarizePlatformStats(
 }
 
 export async function getInstructorAnalytics(user: AppUser | null) {
-  if (missingEnv(["DATABASE_URL"]).length > 0) return fallbackInstructorAnalytics();
+  if (missingEnv(["DATABASE_URL"]).length > 0)
+    return fallbackInstructorAnalytics();
   if (!hasRole(user?.role, "INSTRUCTOR")) {
     return { mode: "permission" as AnalyticsMode, stats: [], courses: [] };
   }
 
   try {
     const courseWhere =
-      user?.role === "ADMIN" ? { status: "PUBLISHED" as const } : { instructorId: user?.id };
+      user?.role === "ADMIN"
+        ? { status: "PUBLISHED" as const }
+        : { instructorId: user?.id };
     const courses = await prisma.course.findMany({
       where: courseWhere,
       orderBy: { updatedAt: "desc" },
@@ -293,37 +296,16 @@ async function loadCourseMetrics(courses: CourseMetricInput[]) {
 function fallbackInstructorAnalytics() {
   return {
     mode: "fallback" as AnalyticsMode,
-    stats: dashboardStats,
-    courses: mockCourses.map((course) => ({
-      id: course.id,
-      title: course.title,
-      level: course.level,
-      status: course.status,
-      instructor: course.instructor,
-      activeEnrollments: course.priceCents === 0 ? 81 : 64,
-      completedEnrollments: course.priceCents === 0 ? 19 : 14,
-      lessonCompletions: course.priceCents === 0 ? 220 : 145,
-      revenueCents: course.priceCents,
-      completionRate: course.priceCents === 0 ? 81 : 64,
-      progressScore: course.priceCents === 0 ? 81 : 64,
-    })),
+    stats: summarizePlatformStats([], 0).dashboard,
+    courses: [],
   };
 }
 
 function fallbackAdminAnalytics() {
   return {
     mode: "fallback" as AnalyticsMode,
-    stats: [
-      { label: "Users", value: "312" },
-      { label: "Courses", value: "18" },
-      { label: "Enrollments", value: "1,024" },
-      { label: "Payments", value: "$42k" },
-    ],
-    users: [
-      { name: "Admin Owner", email: "admin.owner@example.com", role: "ADMIN" },
-      { name: "Instructor Demo", email: "instructor.demo@example.com", role: "INSTRUCTOR" },
-      { name: "Student Demo", email: "student.demo@example.com", role: "STUDENT" },
-    ],
+    stats: summarizePlatformStats([], 0).admin,
+    users: [],
   };
 }
 

@@ -10,7 +10,9 @@ const placeholderValues = new Set([
 
 const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   DATABASE_URL: z.string().optional(),
   DIRECT_URL: z.string().optional(),
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional(),
@@ -19,7 +21,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: z.string().default("/sign-in"),
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string().default("/sign-up"),
   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: z.string().default("/dashboard"),
-  NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: z.string().default("/dashboard"),
+  NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: z
+    .string()
+    .default("/onboarding/organization"),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
@@ -73,10 +77,8 @@ export function integrationStatus() {
   return {
     database: missingEnv(["DATABASE_URL", "DIRECT_URL"]).length === 0,
     clerk:
-      missingEnv([
-        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
-        "CLERK_SECRET_KEY",
-      ]).length === 0,
+      missingEnv(["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY"])
+        .length === 0,
     stripe:
       missingEnv(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]).length === 0,
     r2:

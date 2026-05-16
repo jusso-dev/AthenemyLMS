@@ -1,6 +1,7 @@
 import { SignUp } from "@clerk/nextjs";
 import { SetupMessage } from "@/lib/setup-message";
 import { isClerkConfigured } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { Logo } from "@/components/brand/logo";
 
 export default function SignUpPage() {
@@ -11,7 +12,9 @@ export default function SignUpPage() {
           <Logo />
         </div>
         {isClerkConfigured() ? (
-          <SignUp />
+          <SignUp
+            fallbackRedirectUrl={env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL}
+          />
         ) : (
           <SetupMessage
             title="Clerk setup required"

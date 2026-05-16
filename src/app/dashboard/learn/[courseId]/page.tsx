@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { Award, ClipboardCheck, PlayCircle } from "lucide-react";
+import { Award, CheckCircle2, ClipboardCheck, PlayCircle } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Progress } from "@/components/ui/progress";
 import { getCurrentAppUser } from "@/lib/auth";
 import {
   databaseIsConfigured,
@@ -20,7 +23,12 @@ export default async function LearnCoursePage({
   const user = await getCurrentAppUser();
   const { mode, course, completedLessonIds } = await getLearnCourse(user, courseId);
   const completedIds: string[] = completedLessonIds;
-  const firstLesson = course?.sections[0]?.lessons[0];
+  const lessons = course?.sections.flatMap((section) => section.lessons) ?? [];
+  const firstIncompleteLesson =
+    lessons.find((lesson) => !completedIds.includes(lesson.id)) ?? lessons[0];
+  const progressPercent = lessons.length
+    ? Math.round((completedIds.length / lessons.length) * 100)
+    : 0;
   const assessments =
     mode !== "permission" && databaseIsConfigured()
       ? await prisma.assessment.findMany({
@@ -32,23 +40,39 @@ export default async function LearnCoursePage({
   return (
     <div className="space-y-6">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {course?.title ?? "Course access"}
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Resume where you left off and keep progress visible.
-          </p>
-        </div>
-        {firstLesson ? (
-          <Button asChild>
-            <Link href={`/dashboard/learn/${course?.id}/lessons/${firstLesson.id}`}>
-              Resume lesson
-            </Link>
-          </Button>
-        ) : null}
-      </div>
+      <PageHeader
+        title={course?.title ?? "Course access"}
+        description="Resume where you left off, review the curriculum, and keep required work visible."
+        actions={
+          firstIncompleteLesson ? (
+            <Button asChild>
+              <Link
+                href={`/dashboard/learn/${course?.id}/lessons/${firstIncompleteLesson.id}`}
+              >
+                Resume lesson
+              </Link>
+            </Button>
+          ) : null
+        }
+      />
+      {course ? (
+        <Card>
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium">Course progress</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {completedIds.length} of {lessons.length} lessons complete
+              </p>
+            </div>
+            <div className="w-full sm:max-w-sm">
+              <Progress value={progressPercent} />
+              <p className="mt-2 text-right text-xs font-medium text-muted-foreground">
+                {progressPercent}%
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Lessons</CardTitle>
@@ -65,9 +89,11 @@ export default async function LearnCoursePage({
             </p>
           ) : null}
           {course?.sections.length === 0 ? (
-            <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              Lessons have not been added yet.
-            </p>
+            <EmptyState
+              icon={PlayCircle}
+              title="No lessons yet"
+              description="This course has been created, but the instructor has not added lessons yet."
+            />
           ) : null}
           {course?.sections.map((section) => (
             <div key={section.title}>
@@ -82,7 +108,8 @@ export default async function LearnCoursePage({
                     <PlayCircle className="h-4 w-4 text-primary" />
                     {lesson.title}
                     {completedIds.includes(lesson.id) ? (
-                      <span className="ml-auto text-xs text-muted-foreground">
+                      <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-secondary" />
                         Complete
                       </span>
                     ) : null}

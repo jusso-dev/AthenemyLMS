@@ -1,9 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
-import { mockCourses } from "@/lib/mock-data";
-
-export type PublicCourse = (typeof mockCourses)[number];
 
 const include = {
   instructor: { select: { name: true, imageUrl: true } },
@@ -13,9 +10,11 @@ const include = {
   },
 } satisfies Prisma.CourseInclude;
 
+export type PublicCourse = Prisma.CourseGetPayload<{ include: typeof include }>;
+
 export async function getPublishedCourses(query?: string) {
   if (missingEnv(["DATABASE_URL"]).length > 0) {
-    return filterMockCourses(query);
+    return [];
   }
 
   try {
@@ -33,28 +32,18 @@ export async function getPublishedCourses(query?: string) {
       include,
     });
   } catch {
-    return filterMockCourses(query);
+    return [];
   }
 }
 
 export async function getCourseBySlug(slug: string) {
   if (missingEnv(["DATABASE_URL"]).length > 0) {
-    return mockCourses.find((course) => course.slug === slug) ?? null;
+    return null;
   }
 
   try {
     return await prisma.course.findUnique({ where: { slug }, include });
   } catch {
-    return mockCourses.find((course) => course.slug === slug) ?? null;
+    return null;
   }
-}
-
-function filterMockCourses(query?: string) {
-  if (!query) return mockCourses;
-  const normalized = query.toLowerCase();
-  return mockCourses.filter((course) =>
-    [course.title, course.subtitle, course.description].some((value) =>
-      value.toLowerCase().includes(normalized),
-    ),
-  );
 }

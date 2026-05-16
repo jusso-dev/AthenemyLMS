@@ -25,7 +25,7 @@ npm run db:generate
 npm run dev
 ```
 
-The app runs in local setup mode until real env values are added. Public pages and dashboard previews use mock course data. Protected production paths do not fake authentication.
+The app runs in setup mode until real env values are added. Public pages and dashboard surfaces show empty persisted-data states until Supabase is configured. Protected production paths do not fake authentication.
 
 ## Database Setup
 

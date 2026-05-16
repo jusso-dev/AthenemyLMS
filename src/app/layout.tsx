@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NavigationProgress } from "@/components/navigation/navigation-progress";
+import { ThemeScript } from "@/components/theme/theme-script";
 import { isClerkConfigured } from "@/lib/auth";
 import "./globals.css";
 
@@ -32,9 +34,14 @@ export default function RootLayout({
   const html = (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <ThemeScript />
+      </head>
       <body className="min-h-full">
+        <NavigationProgress />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:ring-2 focus:ring-ring"

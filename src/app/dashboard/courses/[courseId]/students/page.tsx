@@ -1,5 +1,10 @@
+import { Users } from "lucide-react";
+import { CourseManagementNav } from "@/components/courses/course-management-nav";
+import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Progress } from "@/components/ui/progress";
 import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getCourseStudents } from "@/lib/dashboard-data";
 import { SetupMessage } from "@/lib/setup-message";
@@ -16,12 +21,11 @@ export default async function CourseStudentsPage({
   return (
     <div className="space-y-6">
       {mode === "fallback" ? <SetupMessage {...fallbackNotice()} /> : null}
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Students</h1>
-        <p className="mt-2 text-muted-foreground">
-          Enrollment and progress summary for this course.
-        </p>
-      </div>
+      <PageHeader
+        title="Learners"
+        description="Enrollment and progress summary for this course."
+      />
+      <CourseManagementNav courseId={courseId} />
       <Card>
         <CardHeader>
           <CardTitle>Enrolled learners</CardTitle>
@@ -33,9 +37,11 @@ export default async function CourseStudentsPage({
             </p>
           ) : null}
           {mode !== "permission" && students.length === 0 ? (
-            <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              No learners are enrolled in this course yet.
-            </p>
+            <EmptyState
+              icon={Users}
+              title="No enrolled learners"
+              description="Learners will appear here after they enroll or are assigned to this course."
+            />
           ) : null}
           {students.map((student) => (
             <div
@@ -47,12 +53,7 @@ export default async function CourseStudentsPage({
                 <p className="text-sm text-muted-foreground">{student.email}</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="h-2 flex-1 rounded-full bg-muted">
-                  <div
-                    className="h-2 rounded-full bg-secondary"
-                    style={{ width: `${student.progress}%` }}
-                  />
-                </div>
+                <Progress value={student.progress} className="flex-1" />
                 <span className="text-xs text-muted-foreground">
                   {student.progress}%
                 </span>

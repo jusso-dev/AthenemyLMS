@@ -1,7 +1,8 @@
-import { Search } from "lucide-react";
+import { LibraryBig, Search } from "lucide-react";
 import { CourseCard } from "@/components/course-card";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { getPublishedCourses } from "@/lib/course-data";
 
@@ -23,8 +24,7 @@ export default async function CoursesPage({
               Course catalogue
             </h1>
             <p className="mt-3 max-w-2xl text-muted-foreground">
-              Browse published Athenemy courses. Local mock courses appear until
-              Supabase is connected.
+              Browse published Athenemy courses from your connected workspace.
             </p>
           </div>
           <form className="relative w-full md:max-w-sm">
@@ -43,6 +43,14 @@ export default async function CoursesPage({
             <CourseCard key={course.slug} course={course} />
           ))}
         </div>
+        {courses.length === 0 ? (
+          <EmptyState
+            icon={LibraryBig}
+            title="No published courses"
+            description="Published courses from your workspace will appear in this catalogue."
+            className="mt-8"
+          />
+        ) : null}
       </main>
       <SiteFooter />
     </div>

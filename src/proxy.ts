@@ -14,12 +14,12 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.next();
   }
 
-  const { clerkMiddleware, createRouteMatcher } = await import(
-    "@clerk/nextjs/server"
-  );
+  const { clerkMiddleware, createRouteMatcher } =
+    await import("@clerk/nextjs/server");
   const isDashboardRoute = createRouteMatcher(["/dashboard(.*)"]);
+  const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
   const handler = clerkMiddleware(async (auth, req) => {
-    if (isDashboardRoute(req)) {
+    if (isDashboardRoute(req) || isOnboardingRoute(req)) {
       await auth.protect();
     }
 
