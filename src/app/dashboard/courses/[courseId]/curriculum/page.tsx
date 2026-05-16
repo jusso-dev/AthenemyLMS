@@ -211,15 +211,13 @@ export default async function CurriculumPage({
                         {lesson.preview ? (
                           <Badge variant="secondary">Preview</Badge>
                         ) : null}
-                        {lesson.content ? (
-                          <span className="inline-flex items-center gap-1">
-                            <FileText
-                              className="h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                            Notes
-                          </span>
-                        ) : null}
+                        <span className="inline-flex items-center gap-1">
+                          <FileText
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          />
+                          Notes
+                        </span>
                         {lesson.videoUrl || lesson.videoAssetKey ? (
                           <span className="inline-flex items-center gap-1">
                             <Video

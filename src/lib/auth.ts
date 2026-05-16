@@ -1,7 +1,15 @@
-import { currentUser } from "@clerk/nextjs/server";
+import { cache } from "react";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
 import type { Role } from "@/lib/permissions";
+
+const appUserInclude = {
+  _count: { select: { organizationMemberships: true } },
+} satisfies Prisma.UserInclude;
+
+type PersistedAppUser = Prisma.UserGetPayload<{ include: typeof appUserInclude }>;
 
 export type AppUser = {
   id: string;
@@ -13,6 +21,7 @@ export type AppUser = {
   role: Role;
   bio?: string | null;
   websiteUrl?: string | null;
+  organizationMembershipCount?: number;
 };
 
 export function isClerkConfigured() {
@@ -22,8 +31,18 @@ export function isClerkConfigured() {
   );
 }
 
-export async function getCurrentAppUser(): Promise<AppUser | null> {
+export const getCurrentAppUser = cache(async (): Promise<AppUser | null> => {
   if (!isClerkConfigured()) return null;
+  if (missingEnv(["DATABASE_URL"]).length > 0) return null;
+
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  const persistedUser = await prisma.user.findUnique({
+    where: { clerkId: userId },
+    include: appUserInclude,
+  });
+  if (persistedUser) return toAppUser(persistedUser);
 
   const clerkUser = await currentUser();
   if (!clerkUser?.id) return null;
@@ -33,6 +52,7 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
 
   const user = await prisma.user.upsert({
     where: { clerkId: clerkUser.id },
+    include: appUserInclude,
     update: {
       email,
       name: clerkUser.fullName,
@@ -46,8 +66,8 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
     },
   });
 
-  return user as AppUser;
-}
+  return toAppUser(user);
+});
 
 export async function requireAppUser() {
   const user = await getCurrentAppUser();
@@ -59,4 +79,12 @@ export async function requireAppUser() {
     );
   }
   return user;
+}
+
+function toAppUser(user: PersistedAppUser): AppUser {
+  const { _count, ...appUser } = user;
+  return {
+    ...appUser,
+    organizationMembershipCount: _count.organizationMemberships,
+  } as AppUser;
 }

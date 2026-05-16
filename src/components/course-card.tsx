@@ -16,6 +16,7 @@ type CourseCardProps = {
     durationMinutes?: number;
     instructor?: { name?: string | null } | null;
     sections?: { lessons?: unknown[] }[];
+    _count?: { sections?: number };
   };
 };
 
@@ -25,6 +26,7 @@ export function CourseCard({ course }: CourseCardProps) {
       (total, section) => total + (section.lessons?.length ?? 0),
       0,
     ) ?? 0;
+  const sectionCount = course._count?.sections ?? course.sections?.length ?? 0;
 
   return (
     <Card className="flex h-full flex-col overflow-hidden">
@@ -58,7 +60,7 @@ export function CourseCard({ course }: CourseCardProps) {
           </span>
           <span className="inline-flex items-center gap-1">
             <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
-            {course.sections?.length ?? 0} sections
+            {sectionCount} sections
           </span>
         </div>
         <Button asChild variant="outline" className="w-full">

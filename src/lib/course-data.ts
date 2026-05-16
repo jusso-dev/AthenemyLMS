@@ -2,15 +2,35 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
 
-const include = {
+const courseCardSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  subtitle: true,
+  priceCents: true,
+  currency: true,
+  level: true,
+  durationMinutes: true,
+  instructor: { select: { name: true, imageUrl: true } },
+  _count: { select: { sections: true } },
+} satisfies Prisma.CourseSelect;
+
+const courseDetailInclude = {
   instructor: { select: { name: true, imageUrl: true } },
   sections: {
     orderBy: { position: "asc" as const },
-    include: { lessons: { orderBy: { position: "asc" as const } } },
+    include: {
+      lessons: {
+        orderBy: { position: "asc" as const },
+        select: { id: true, title: true, position: true },
+      },
+    },
   },
 } satisfies Prisma.CourseInclude;
 
-export type PublicCourse = Prisma.CourseGetPayload<{ include: typeof include }>;
+export type PublicCourse = Prisma.CourseGetPayload<{
+  include: typeof courseDetailInclude;
+}>;
 
 export async function getPublishedCourses(query?: string) {
   if (missingEnv(["DATABASE_URL"]).length > 0) {
@@ -29,7 +49,7 @@ export async function getPublishedCourses(query?: string) {
           : undefined,
       },
       orderBy: { updatedAt: "desc" },
-      include,
+      select: courseCardSelect,
     });
   } catch {
     return [];
@@ -44,7 +64,7 @@ export async function getCourseBySlug(slug: string) {
   try {
     return await prisma.course.findFirst({
       where: { slug, status: "PUBLISHED" },
-      include,
+      include: courseDetailInclude,
     });
   } catch {
     return null;

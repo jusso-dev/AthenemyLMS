@@ -7,7 +7,33 @@ import { formatPrice } from "@/lib/utils";
 
 type DashboardMode = "database" | "fallback" | "permission";
 
+const lessonSummarySelect = {
+  id: true,
+  sectionId: true,
+  title: true,
+  slug: true,
+  position: true,
+  durationMinutes: true,
+  preview: true,
+  videoUrl: true,
+  videoAssetKey: true,
+} satisfies Prisma.LessonSelect;
+
 const courseInclude = {
+  instructor: { select: { name: true, imageUrl: true } },
+  sections: {
+    orderBy: { position: "asc" as const },
+    include: {
+      lessons: {
+        orderBy: { position: "asc" as const },
+        select: lessonSummarySelect,
+      },
+    },
+  },
+  _count: { select: { enrollments: true, payments: true } },
+} satisfies Prisma.CourseInclude;
+
+const courseContentInclude = {
   instructor: { select: { name: true, imageUrl: true } },
   sections: {
     orderBy: { position: "asc" as const },
@@ -75,7 +101,14 @@ export async function getDashboardOverview(user: AppUser | null) {
         where: courseScope,
         orderBy: { updatedAt: "desc" },
         take: 5,
-        include: courseInclude,
+        select: {
+          id: true,
+          title: true,
+          level: true,
+          status: true,
+          instructor: { select: { name: true, imageUrl: true } },
+          _count: { select: { enrollments: true } },
+        },
       }),
     ]);
 
@@ -133,7 +166,14 @@ export async function getManageCourses(user: AppUser | null, query?: string) {
             : undefined,
         },
         orderBy: { updatedAt: "desc" },
-        include: courseInclude,
+        select: {
+          id: true,
+          title: true,
+          subtitle: true,
+          status: true,
+          priceCents: true,
+          currency: true,
+        },
       }),
     };
   } catch {
@@ -309,7 +349,11 @@ export async function getMyCourses(user: AppUser | null) {
   }
 }
 
-export async function getLearnCourse(user: AppUser | null, courseId: string) {
+export async function getLearnCourse(
+  user: AppUser | null,
+  courseId: string,
+  options: { includeLessonContent?: boolean } = {},
+) {
   if (!databaseIsConfigured()) {
     return {
       mode: "fallback" as DashboardMode,
@@ -320,7 +364,7 @@ export async function getLearnCourse(user: AppUser | null, courseId: string) {
 
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    include: courseInclude,
+    include: options.includeLessonContent ? courseContentInclude : courseInclude,
   });
 
   if (!course) {

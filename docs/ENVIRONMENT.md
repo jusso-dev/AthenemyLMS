@@ -22,6 +22,20 @@ cp .env.example .env.local
 - `DATABASE_URL`: Supabase pooled connection string for Prisma Client.
 - `DIRECT_URL`: Supabase direct connection string for migrations.
 
+For fast local development, point both values at a local Postgres instance
+instead of a remote Supabase pooler:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/athenemy"
+DIRECT_URL="postgresql://postgres:postgres@localhost:5432/athenemy"
+```
+
+After changing database targets, run:
+
+```bash
+npm run db:migrate
+```
+
 ### Clerk
 
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`

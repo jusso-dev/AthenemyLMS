@@ -31,6 +31,7 @@ export default async function LessonPlayerPage({
   const { mode, course, completedLessonIds } = await getLearnCourse(
     user,
     courseId,
+    { includeLessonContent: true },
   );
   if (!course && mode !== "permission") notFound();
 
