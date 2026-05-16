@@ -1,12 +1,22 @@
 import Link from "next/link";
-import { FileUp, LibraryBig, Plus, Rocket, Search } from "lucide-react";
+import {
+  Archive,
+  FileUp,
+  LibraryBig,
+  Plus,
+  Rocket,
+  RotateCcw,
+  Search,
+} from "lucide-react";
 import {
   ActionForm,
   PendingSubmitButton,
 } from "@/components/forms/action-form";
 import {
+  archiveCourseFormAction,
   importPresentationCourseFormAction,
   publishCourseFormAction,
+  restoreCourseFormAction,
 } from "@/app/dashboard/courses/actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -136,16 +146,20 @@ export default async function ManageCoursesPage({
             >
               <div>
                 <p className="font-medium">{course.title}</p>
-                <p className="text-sm text-muted-foreground">{course.subtitle}</p>
+                <p className="text-sm text-muted-foreground">
+                  {course.subtitle}
+                </p>
               </div>
-              <Badge variant={course.status === "PUBLISHED" ? "success" : "outline"}>
+              <Badge
+                variant={course.status === "PUBLISHED" ? "success" : "outline"}
+              >
                 {course.status}
               </Badge>
               <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
                 <span className="text-sm font-medium">
                   {formatPrice(course.priceCents, course.currency)}
                 </span>
-                {course.status !== "PUBLISHED" ? (
+                {course.status === "DRAFT" ? (
                   <ActionForm
                     action={publishCourseFormAction.bind(null, course.id)}
                     inlineMessage={false}
@@ -156,8 +170,39 @@ export default async function ManageCoursesPage({
                     </PendingSubmitButton>
                   </ActionForm>
                 ) : null}
+                {course.status === "ARCHIVED" ? (
+                  <ActionForm
+                    action={restoreCourseFormAction.bind(null, course.id)}
+                    inlineMessage={false}
+                  >
+                    <PendingSubmitButton
+                      size="sm"
+                      variant="outline"
+                      pendingLabel="Restoring..."
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Restore
+                    </PendingSubmitButton>
+                  </ActionForm>
+                ) : (
+                  <ActionForm
+                    action={archiveCourseFormAction.bind(null, course.id)}
+                    inlineMessage={false}
+                  >
+                    <PendingSubmitButton
+                      size="sm"
+                      variant="outline"
+                      pendingLabel="Archiving..."
+                    >
+                      <Archive className="h-4 w-4" />
+                      Archive
+                    </PendingSubmitButton>
+                  </ActionForm>
+                )}
                 <Button asChild size="sm" variant="outline">
-                  <Link href={`/dashboard/courses/${course.id}/edit`}>Edit</Link>
+                  <Link href={`/dashboard/courses/${course.id}/edit`}>
+                    Edit
+                  </Link>
                 </Button>
               </div>
             </div>
