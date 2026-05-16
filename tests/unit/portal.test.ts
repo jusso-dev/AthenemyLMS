@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultBlockConfig,
+  draftTheme,
   normalizeBlockConfig,
   parseLinksInput,
 } from "@/lib/portal";
@@ -38,5 +39,27 @@ describe("portal helpers", () => {
       heading: "Build practical skills with our courses",
       ctaHref: "./courses",
     });
+  });
+
+  it("normalizes portal theme mode", () => {
+    expect(
+      draftTheme({
+        primaryColor: "#123456",
+        accentColor: "#abcdef",
+        fontFamily: "sans",
+        buttonStyle: "rounded",
+        themeMode: "dark",
+      }).themeMode,
+    ).toBe("dark");
+
+    expect(
+      draftTheme({
+        primaryColor: "#123456",
+        accentColor: "#abcdef",
+        fontFamily: "sans",
+        buttonStyle: "rounded",
+        themeMode: "unexpected",
+      }).themeMode,
+    ).toBe("system");
   });
 });

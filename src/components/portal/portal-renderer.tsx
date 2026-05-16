@@ -6,6 +6,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { CourseCard } from "@/components/course-card";
+import { PortalThemeToggle } from "@/components/portal/portal-theme-toggle";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -59,6 +60,7 @@ export function PortalShell({
         theme.fontFamily === "serif" && "font-serif",
         theme.fontFamily === "mono" && "font-mono",
       )}
+      data-portal-theme={theme.themeMode}
       style={rootStyle}
     >
       <header className="border-b border-[color:var(--portal-border)] bg-[color:var(--portal-chrome)]">
@@ -99,6 +101,10 @@ export function PortalShell({
                 {signedIn ? "Continue learning" : "Sign in"}
               </Link>
             </Button>
+            <PortalThemeToggle
+              defaultTheme={theme.themeMode}
+              portalSlug={organizationSlug}
+            />
           </nav>
         </div>
       </header>

@@ -115,6 +115,37 @@ body {
   background-size: 44px 44px;
 }
 
+.portal-surface,
+.portal-surface[data-portal-theme="system"],
+.portal-surface[data-portal-theme="light"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  color-scheme: light;
+}
+
+.dark .portal-surface[data-portal-theme="system"],
+.portal-surface[data-portal-theme="dark"] {
+  --background: #020617;
+  --foreground: #f8fafc;
+  --card: #111827;
+  --card-foreground: #f8fafc;
+  --popover: #0f172a;
+  --popover-foreground: #f8fafc;
+  --muted: #0f172a;
+  --muted-foreground: #94a3b8;
+  --border: #1e293b;
+  --input: #1e293b;
+  color-scheme: dark;
+}
+
 .portal-surface {
   --portal-background: var(--background);
   --portal-card: var(--card);
@@ -146,7 +177,8 @@ body {
   --portal-primary-foreground: oklch(0.985 0.006 255);
 }
 
-.dark .portal-surface {
+.dark .portal-surface[data-portal-theme="system"],
+.portal-surface[data-portal-theme="dark"] {
   --portal-background: color-mix(
     in oklab,
     var(--background) 94%,

@@ -153,18 +153,32 @@ export default async function DashboardSitePage() {
                         <option value="mono">Mono</option>
                       </select>
                     </label>
-                    <label className="grid gap-2 text-sm font-medium">
-                      Button style
-                      <select
-                        name="buttonStyle"
-                        defaultValue={theme.buttonStyle}
-                        className="h-10 rounded-md border bg-background px-3 text-sm"
-                      >
-                        <option value="rounded">Rounded</option>
-                        <option value="square">Square</option>
-                        <option value="pill">Pill</option>
-                      </select>
-                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="grid gap-2 text-sm font-medium">
+                        Button style
+                        <select
+                          name="buttonStyle"
+                          defaultValue={theme.buttonStyle}
+                          className="h-10 rounded-md border bg-background px-3 text-sm"
+                        >
+                          <option value="rounded">Rounded</option>
+                          <option value="square">Square</option>
+                          <option value="pill">Pill</option>
+                        </select>
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium">
+                        Default theme
+                        <select
+                          name="themeMode"
+                          defaultValue={theme.themeMode}
+                          className="h-10 rounded-md border bg-background px-3 text-sm"
+                        >
+                          <option value="system">System</option>
+                          <option value="light">Light</option>
+                          <option value="dark">Dark</option>
+                        </select>
+                      </label>
+                    </div>
                     <LabeledTextarea
                       label="Navigation links"
                       name="navLinks"

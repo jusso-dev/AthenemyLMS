@@ -29,6 +29,7 @@ export type PortalTheme = {
   accentColor: string;
   fontFamily: string;
   buttonStyle: string;
+  themeMode: "system" | "light" | "dark";
   navLinks: PortalLink[];
   footerLinks: PortalLink[];
 };
@@ -251,6 +252,7 @@ export function draftTheme(portal: {
   accentColor: string;
   fontFamily: string;
   buttonStyle: string;
+  themeMode?: string | null;
   navLinks?: Prisma.JsonValue | null;
   footerLinks?: Prisma.JsonValue | null;
 }): PortalTheme {
@@ -260,6 +262,7 @@ export function draftTheme(portal: {
     accentColor: normalizeHex(portal.accentColor, "#0f766e"),
     fontFamily: portal.fontFamily,
     buttonStyle: portal.buttonStyle,
+    themeMode: normalizeThemeMode(portal.themeMode),
     navLinks: parseLinks(portal.navLinks, defaultNavLinks()),
     footerLinks: parseLinks(portal.footerLinks, defaultFooterLinks()),
   };
@@ -272,9 +275,10 @@ export function publishedTheme(portal: {
   accentColor: string;
   fontFamily: string;
   buttonStyle: string;
+  themeMode?: string | null;
   navLinks?: Prisma.JsonValue | null;
   footerLinks?: Prisma.JsonValue | null;
-}) {
+}): PortalTheme {
   if (isObject(portal.publishedTheme)) {
     return {
       logoUrl:
@@ -291,6 +295,9 @@ export function publishedTheme(portal: {
       ),
       fontFamily: String(portal.publishedTheme.fontFamily ?? "sans"),
       buttonStyle: String(portal.publishedTheme.buttonStyle ?? "rounded"),
+      themeMode: normalizeThemeMode(
+        String(portal.publishedTheme.themeMode ?? ""),
+      ),
       navLinks: parseLinks(portal.publishedTheme.navLinks, defaultNavLinks()),
       footerLinks: parseLinks(
         portal.publishedTheme.footerLinks,
@@ -299,6 +306,12 @@ export function publishedTheme(portal: {
     };
   }
   return draftTheme(portal);
+}
+
+function normalizeThemeMode(
+  value: string | null | undefined,
+): PortalTheme["themeMode"] {
+  return value === "light" || value === "dark" ? value : "system";
 }
 
 export function blockConfig(block: {

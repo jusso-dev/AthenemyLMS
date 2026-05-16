@@ -202,6 +202,7 @@ model OrganizationPortal {
   accentColor    String       @default("#0f766e")
   fontFamily     String       @default("sans")
   buttonStyle    String       @default("rounded")
+  themeMode      String       @default("system")
   navLinks       Json?
   footerLinks    Json?
   publishedTheme Json?

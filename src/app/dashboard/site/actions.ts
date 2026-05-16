@@ -29,6 +29,7 @@ const themeSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, "Use a valid accent color"),
   fontFamily: z.enum(["sans", "serif", "mono"]).default("sans"),
   buttonStyle: z.enum(["rounded", "square", "pill"]).default("rounded"),
+  themeMode: z.enum(["system", "light", "dark"]).default("system"),
   navLinks: z.string().max(2000).optional().or(z.literal("")),
   footerLinks: z.string().max(2000).optional().or(z.literal("")),
 });
@@ -78,6 +79,7 @@ export async function updatePortalThemeFormAction(
       accentColor: formData.get("accentColor"),
       fontFamily: formData.get("fontFamily"),
       buttonStyle: formData.get("buttonStyle"),
+      themeMode: formData.get("themeMode"),
       navLinks: formData.get("navLinks") ?? "",
       footerLinks: formData.get("footerLinks") ?? "",
     });
@@ -91,6 +93,7 @@ export async function updatePortalThemeFormAction(
         accentColor: parsed.accentColor,
         fontFamily: parsed.fontFamily,
         buttonStyle: parsed.buttonStyle,
+        themeMode: parsed.themeMode,
         navLinks: parseLinksInput(
           parsed.navLinks ?? "",
           draftTheme(portal).navLinks,
