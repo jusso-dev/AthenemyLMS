@@ -42,7 +42,10 @@ export async function getCourseBySlug(slug: string) {
   }
 
   try {
-    return await prisma.course.findUnique({ where: { slug }, include });
+    return await prisma.course.findFirst({
+      where: { slug, status: "PUBLISHED" },
+      include,
+    });
   } catch {
     return null;
   }

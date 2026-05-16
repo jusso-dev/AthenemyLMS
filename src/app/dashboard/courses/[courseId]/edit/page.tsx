@@ -1,9 +1,18 @@
 import { notFound } from "next/navigation";
+import { Rocket } from "lucide-react";
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
 import { CourseManagementNav } from "@/components/courses/course-management-nav";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CourseForm } from "@/components/forms/course-form";
 import { PageHeader } from "@/components/layout/page-header";
-import { updateCourseFormAction } from "@/app/dashboard/courses/actions";
+import {
+  publishCourseFormAction,
+  updateCourseFormAction,
+} from "@/app/dashboard/courses/actions";
 import { getCurrentAppUser } from "@/lib/auth";
 import { fallbackNotice, getEditableCourse } from "@/lib/dashboard-data";
 import { SetupMessage } from "@/lib/setup-message";
@@ -25,6 +34,28 @@ export default async function EditCoursePage({
         eyebrow={course?.title ?? "Permission required"}
         title="Course details"
         description="Set the public listing, pricing, publication state, and certificate behavior."
+        actions={
+          course && mode === "database" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant={course.status === "PUBLISHED" ? "success" : "outline"}
+              >
+                {course.status}
+              </Badge>
+              {course.status !== "PUBLISHED" ? (
+                <ActionForm
+                  action={publishCourseFormAction.bind(null, course.id)}
+                  inlineMessage={false}
+                >
+                  <PendingSubmitButton pendingLabel="Publishing...">
+                    <Rocket className="h-4 w-4" />
+                    Publish course
+                  </PendingSubmitButton>
+                </ActionForm>
+              ) : null}
+            </div>
+          ) : null
+        }
       />
       <CourseManagementNav courseId={courseId} />
       <Card>

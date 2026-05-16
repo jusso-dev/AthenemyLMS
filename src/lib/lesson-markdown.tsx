@@ -15,9 +15,18 @@ type ImageBlock = {
   type: "image";
   alt: string;
   src: string;
+  width?: number;
+  height?: number;
 };
 
 type Block = ListBlock | TextBlock | ImageBlock;
+
+type RenderBlock =
+  | Block
+  | {
+      type: "imageGroup";
+      images: ImageBlock[];
+    };
 
 export function parseLessonMarkdown(markdown: string) {
   const blocks: Block[] = [];
@@ -34,7 +43,8 @@ export function parseLessonMarkdown(markdown: string) {
 
   function flushList() {
     if (list.length > 0) {
-      blocks.push({ type: "list", items: list });
+      const items = normalizeListItems(list);
+      if (items.length > 0) blocks.push({ type: "list", items });
       list = [];
     }
   }
@@ -68,7 +78,9 @@ export function parseLessonMarkdown(markdown: string) {
       continue;
     }
 
-    const imageMatch = trimmed.match(/^!\[(.*)]\((.*)\)$/);
+    const imageMatch = trimmed.match(
+      /^!\[(.*)]\((.*)\)(?:\{width=(\d+) height=(\d+)})?$/,
+    );
     if (imageMatch) {
       flushParagraph();
       flushList();
@@ -76,6 +88,8 @@ export function parseLessonMarkdown(markdown: string) {
         type: "image",
         alt: imageMatch[1] || "Lesson image",
         src: imageMatch[2],
+        width: imageMatch[3] ? Number(imageMatch[3]) : undefined,
+        height: imageMatch[4] ? Number(imageMatch[4]) : undefined,
       });
       continue;
     }
@@ -97,6 +111,7 @@ export function parseLessonMarkdown(markdown: string) {
 
 export function LessonMarkdown({ content }: { content: string }) {
   const blocks = parseLessonMarkdown(content);
+  const renderBlocks = groupConsecutiveImages(blocks);
 
   if (blocks.length === 0) {
     return (
@@ -108,7 +123,7 @@ export function LessonMarkdown({ content }: { content: string }) {
 
   return (
     <div className="space-y-4 text-sm leading-7">
-      {blocks.map((block, index) => {
+      {renderBlocks.map((block, index) => {
         if (block.type === "heading") {
           const className =
             block.level === 2
@@ -147,14 +162,23 @@ export function LessonMarkdown({ content }: { content: string }) {
         }
 
         if (block.type === "image") {
+          return <LessonImage key={index} image={block} />;
+        }
+
+        if (block.type === "imageGroup") {
           return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <div
               key={index}
-              src={block.src}
-              alt={block.alt}
-              className="max-h-[520px] rounded-md border object-contain"
-            />
+              className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:grid-cols-2"
+            >
+              {block.images.map((image) => (
+                <LessonImage
+                  key={`${image.alt}-${image.src.slice(0, 80)}`}
+                  image={image}
+                  grouped
+                />
+              ))}
+            </div>
           );
         }
 
@@ -165,5 +189,98 @@ export function LessonMarkdown({ content }: { content: string }) {
         );
       })}
     </div>
+  );
+}
+
+function normalizeListItems(items: string[]) {
+  const filtered = items.filter((item, index) => {
+    if (item === "#" || isSlideCounter(item)) return false;
+    return !(items[index + 1] && isSlideCounter(items[index + 1]));
+  });
+  const normalized: string[] = [];
+
+  for (const item of filtered) {
+    const previous = normalized.at(-1);
+    if (previous && shouldMergeListItem(previous, item)) {
+      normalized[normalized.length - 1] = mergeListItem(previous, item);
+    } else {
+      normalized.push(item);
+    }
+  }
+
+  return normalized;
+}
+
+function isSlideCounter(item: string) {
+  return /^\d+\s*\/\s*\d+$/.test(item);
+}
+
+function shouldMergeListItem(previous: string, next: string) {
+  if (/^[,.;:!?)]/.test(next)) return true;
+  if (/^[a-z]/.test(next) && !/[.!?:;)]$/.test(previous)) return true;
+  return false;
+}
+
+function mergeListItem(previous: string, next: string) {
+  const separator = /^[,.;:!?)]/.test(next) ? "" : " ";
+  return `${previous}${separator}${next}`.replace(/\s+([,.;:!?%)])/g, "$1");
+}
+
+function groupConsecutiveImages(blocks: Block[]) {
+  const grouped: RenderBlock[] = [];
+  let images: ImageBlock[] = [];
+
+  function flushImages() {
+    if (images.length === 1) {
+      grouped.push(images[0]);
+    } else if (images.length > 1) {
+      grouped.push({ type: "imageGroup", images });
+    }
+    images = [];
+  }
+
+  for (const block of blocks) {
+    if (block.type === "image") {
+      images.push(block);
+    } else {
+      flushImages();
+      grouped.push(block);
+    }
+  }
+
+  flushImages();
+  return grouped;
+}
+
+function LessonImage({
+  image,
+  grouped = false,
+}: {
+  image: ImageBlock;
+  grouped?: boolean;
+}) {
+  const aspectRatio =
+    image.width && image.height ? `${image.width} / ${image.height}` : undefined;
+
+  return (
+    <figure
+      className={
+        grouped
+          ? "flex min-h-40 items-center justify-center rounded-md bg-background p-2"
+          : "overflow-hidden rounded-md border bg-muted/20"
+      }
+      style={aspectRatio && !grouped ? { aspectRatio } : undefined}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={image.src}
+        alt={image.alt}
+        className={
+          grouped
+            ? "max-h-56 max-w-full object-contain"
+            : "max-h-[680px] w-full object-contain"
+        }
+      />
+    </figure>
   );
 }

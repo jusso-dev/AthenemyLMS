@@ -17,6 +17,17 @@ type Relationship = {
   Target: string;
 };
 
+type SlideTextBlock = {
+  text: string;
+  bullet: boolean;
+};
+
+type SlideImage = {
+  src: string;
+  width?: number;
+  height?: number;
+};
+
 export type PresentationLessonDraft = {
   title: string;
   slug: string;
@@ -53,7 +64,7 @@ export async function buildPresentationCourseDraft({
   const baseTitle = titleFromFileName(fileName);
   const lessons = await Promise.all(
     slidePaths.map(async (slidePath, index) =>
-      buildLessonFromSlide(zip, slidePath, index),
+      buildLessonFromSlide(zip, slidePath, index, baseTitle),
     ),
   );
 
@@ -128,21 +139,29 @@ async function buildLessonFromSlide(
   zip: JSZip,
   slidePath: string,
   index: number,
+  presentationTitle: string,
 ): Promise<PresentationLessonDraft> {
   const slideXml = await zip.file(slidePath)?.async("string");
   if (!slideXml) throw new Error(`Slide ${index + 1} could not be read.`);
 
-  const textRuns = extractTextRuns(parser.parse(slideXml));
-  const title = truncateTitle(textRuns[0] || `Slide ${index + 1}`);
-  const bodyText = textRuns.slice(1);
-  const images = await extractSlideImages(zip, slidePath);
+  const parsedSlide = parser.parse(slideXml);
+  const textBlocks = extractTextBlocks(parsedSlide, presentationTitle);
+  const title = truncateTitle(textBlocks[0]?.text || `Slide ${index + 1}`);
+  const bodyBlocks = textBlocks.slice(1);
+  const images = await extractSlideImages(zip, slidePath, parsedSlide);
   const notes = await extractSpeakerNotes(zip, slidePath);
 
   const content = [
     `## ${title}`,
-    bodyText.length ? bodyText.map((line) => `- ${line}`).join("\n") : "",
+    formatTextBlocks(bodyBlocks),
     images
-      .map((image, imageIndex) => `![Slide ${index + 1} image ${imageIndex + 1}](${image})`)
+      .map((image, imageIndex) => {
+        const dimensions =
+          image.width && image.height
+            ? `{width=${image.width} height=${image.height}}`
+            : "";
+        return `![Slide ${index + 1} image ${imageIndex + 1}](${image.src})${dimensions}`;
+      })
       .join("\n\n"),
     notes.length ? `### Speaker notes\n${notes.join("\n\n")}` : "",
   ]
@@ -157,14 +176,33 @@ async function buildLessonFromSlide(
   };
 }
 
-async function extractSlideImages(zip: JSZip, slidePath: string) {
+async function extractSlideImages(
+  zip: JSZip,
+  slidePath: string,
+  parsedSlide: unknown,
+) {
   const relationships = await readRelationships(zip, slideRelsPath(slidePath));
-  const imageRels = relationships
-    .filter((rel) => rel.Type.includes("/image"))
-    .slice(0, MAX_IMAGES_PER_SLIDE);
+  const imageRelsById = new Map(
+    relationships
+      .filter((rel) => rel.Type.includes("/image"))
+      .map((rel) => [rel.Id, rel]),
+  );
+  const pictureRefs = extractPictureRefs(parsedSlide);
+  const orderedRefs: Array<{ relId: string; width?: number; height?: number }> = [
+    ...pictureRefs.filter((picture) => imageRelsById.has(picture.relId)),
+    ...relationships
+      .filter(
+        (rel) =>
+          rel.Type.includes("/image") &&
+          !pictureRefs.some((picture) => picture.relId === rel.Id),
+      )
+      .map((rel) => ({ relId: rel.Id })),
+  ].slice(0, MAX_IMAGES_PER_SLIDE);
 
-  const images: string[] = [];
-  for (const rel of imageRels) {
+  const images: SlideImage[] = [];
+  for (const picture of orderedRefs) {
+    const rel = imageRelsById.get(picture.relId);
+    if (!rel) continue;
     const imagePath = resolveZipPath(slidePath, rel.Target);
     const file = zip.file(imagePath);
     if (!file) continue;
@@ -173,7 +211,11 @@ async function extractSlideImages(zip: JSZip, slidePath: string) {
     if (bytes.byteLength > MAX_IMAGE_BYTES) continue;
 
     const base64 = Buffer.from(bytes).toString("base64");
-    images.push(`data:${mimeTypeForPath(imagePath)};base64,${base64}`);
+    images.push({
+      src: `data:${mimeTypeForPath(imagePath)};base64,${base64}`,
+      width: picture.width,
+      height: picture.height,
+    });
   }
 
   return images;
@@ -200,7 +242,47 @@ async function readRelationships(zip: JSZip, path: string) {
 }
 
 function extractTextRuns(node: unknown): string[] {
-  const runs: string[] = [];
+  return extractTextBlocks(node).map((block) => block.text);
+}
+
+function extractTextBlocks(
+  node: unknown,
+  presentationTitle?: string,
+): SlideTextBlock[] {
+  const blocks: SlideTextBlock[] = [];
+
+  function visit(value: unknown) {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+
+    const record = value as Record<string, unknown>;
+    if ("a:p" in record) {
+      asArray(record["a:p"]).forEach((paragraph) => {
+        const block = readParagraph(paragraph);
+        if (block) blocks.push(block);
+      });
+
+      for (const [key, child] of Object.entries(record)) {
+        if (key !== "a:p") visit(child);
+      }
+      return;
+    }
+
+    Object.values(record).forEach(visit);
+  }
+
+  visit(node);
+  return dedupeAdjacent(
+    blocks.filter((block) => isMeaningfulSlideText(block.text, presentationTitle)),
+    (block) => block.text,
+  );
+}
+
+function readParagraph(paragraph: unknown): SlideTextBlock | null {
+  const fragments: string[] = [];
 
   function visit(value: unknown) {
     if (!value || typeof value !== "object") return;
@@ -211,19 +293,158 @@ function extractTextRuns(node: unknown): string[] {
 
     const record = value as Record<string, unknown>;
     if (typeof record["a:t"] === "string") {
-      const text = record["a:t"].trim();
-      if (text) runs.push(text);
+      fragments.push(record["a:t"]);
+    }
+
+    Object.values(record).forEach(visit);
+  }
+
+  visit(paragraph);
+  const text = joinTextFragments(fragments);
+  if (!text) return null;
+
+  return {
+    text,
+    bullet: hasBulletMarker((paragraph as Record<string, unknown>)?.["a:pPr"]),
+  };
+}
+
+function extractPictureRefs(node: unknown) {
+  const refs: Array<{ relId: string; width?: number; height?: number }> = [];
+
+  function visit(value: unknown) {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+
+    const record = value as Record<string, unknown>;
+    if ("p:pic" in record) {
+      asArray(record["p:pic"]).forEach((picture) => {
+        const ref = readPictureRef(picture);
+        if (ref) refs.push(ref);
+      });
+
+      for (const [key, child] of Object.entries(record)) {
+        if (key !== "p:pic") visit(child);
+      }
+      return;
     }
 
     Object.values(record).forEach(visit);
   }
 
   visit(node);
-  return dedupeAdjacent(runs);
+  return refs;
 }
 
-function dedupeAdjacent(items: string[]) {
-  return items.filter((item, index) => item !== items[index - 1]);
+function readPictureRef(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const picture = value as Record<string, unknown>;
+  const blipFill = picture["p:blipFill"] as Record<string, unknown> | undefined;
+  const blip = blipFill?.["a:blip"] as Record<string, unknown> | undefined;
+  const relId = blip?.["r:embed"];
+  if (typeof relId !== "string") return null;
+
+  const shapeProps = picture["p:spPr"] as Record<string, unknown> | undefined;
+  const transform = shapeProps?.["a:xfrm"] as Record<string, unknown> | undefined;
+  const ext = transform?.["a:ext"] as Record<string, unknown> | undefined;
+  const width = emuToPixels(ext?.cx);
+  const height = emuToPixels(ext?.cy);
+
+  return { relId, width, height };
+}
+
+function hasBulletMarker(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+
+  if ("a:buNone" in record) return false;
+  if (
+    "a:buChar" in record ||
+    "a:buAutoNum" in record ||
+    "a:buBlip" in record
+  ) {
+    return true;
+  }
+
+  return Object.values(record).some(hasBulletMarker);
+}
+
+function joinTextFragments(fragments: string[]) {
+  let text = "";
+
+  for (const rawFragment of fragments) {
+    const fragment = rawFragment.replace(/\s+/g, " ");
+    const trimmed = fragment.trim();
+    if (!trimmed) continue;
+
+    if (!text) {
+      text = trimmed;
+      continue;
+    }
+
+    if (/^[,.;:!?%)]/.test(trimmed)) {
+      text += trimmed;
+    } else if (/\s$/.test(text) || /^\s/.test(fragment)) {
+      text += trimmed;
+    } else {
+      text += ` ${trimmed}`;
+    }
+  }
+
+  return text.replace(/\s+([,.;:!?%])/g, "$1").trim();
+}
+
+function isMeaningfulSlideText(text: string, presentationTitle?: string) {
+  const normalized = text.trim();
+  if (!normalized || normalized === "#") return false;
+  if (/^\d+\s*\/\s*\d+$/.test(normalized)) return false;
+  if (
+    presentationTitle &&
+    normalized.toLowerCase() === presentationTitle.toLowerCase()
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function formatTextBlocks(blocks: SlideTextBlock[]) {
+  const parts: string[] = [];
+  let list: string[] = [];
+
+  function flushList() {
+    if (list.length) {
+      parts.push(list.map((item) => `- ${item}`).join("\n"));
+      list = [];
+    }
+  }
+
+  for (const block of blocks) {
+    if (block.bullet) {
+      list.push(block.text);
+    } else {
+      flushList();
+      parts.push(block.text);
+    }
+  }
+
+  flushList();
+  return parts.join("\n\n");
+}
+
+function dedupeAdjacent<T>(items: T[], keyFor: (item: T) => string = String) {
+  return items.filter((item, index) => {
+    if (index === 0) return true;
+    return keyFor(item) !== keyFor(items[index - 1]);
+  });
+}
+
+function emuToPixels(value: unknown) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return undefined;
+  return Math.round(number / 9525);
 }
 
 function slideRelsPath(slidePath: string) {

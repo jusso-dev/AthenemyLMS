@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     requireAppUser: vi.fn(),
     revalidatePath: vi.fn(),
     redirect: vi.fn(),
+    sendCoursePublishedEmail: vi.fn(),
   };
 });
 
@@ -54,6 +55,9 @@ vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
 vi.mock("@/lib/auth", () => ({ requireAppUser: mocks.requireAppUser }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("@/lib/email", () => ({
+  sendCoursePublishedEmail: mocks.sendCoursePublishedEmail,
+}));
 
 import {
   createCourseAction,
@@ -68,6 +72,7 @@ import {
   moveAssessmentQuestionFormAction,
   moveLessonFormAction,
   moveSectionFormAction,
+  publishCourseFormAction,
   updateAssessmentQuestionFormAction,
   updateCourseAction,
 } from "@/app/dashboard/courses/actions";
@@ -118,6 +123,72 @@ describe("dashboard course actions", () => {
       }),
     );
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard/courses");
+  });
+
+  it("publishes a draft course with a friendly action result", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      title: "Course Design Foundations",
+      slug: "course-design-foundations",
+      status: "DRAFT",
+      publishedAt: null,
+    });
+    mocks.prisma.course.update.mockResolvedValue({
+      id: "course_1",
+      title: "Course Design Foundations",
+      slug: "course-design-foundations",
+    });
+    mocks.sendCoursePublishedEmail.mockResolvedValue({});
+
+    await expect(
+      publishCourseFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Course published.",
+    });
+
+    expect(mocks.prisma.course.update).toHaveBeenCalledWith({
+      where: { id: "course_1" },
+      data: {
+        status: "PUBLISHED",
+        publishedAt: expect.any(Date),
+      },
+    });
+    expect(mocks.sendCoursePublishedEmail).toHaveBeenCalledWith({
+      to: "instructor@example.com",
+      name: "Instructor",
+      courseTitle: "Course Design Foundations",
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/courses");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(
+      "/courses/course-design-foundations",
+    );
+  });
+
+  it("returns a friendly error when publish is not permitted", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "someone_else",
+      status: "DRAFT",
+      publishedAt: null,
+    });
+
+    await expect(
+      publishCourseFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        new FormData(),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "You do not have permission to publish this course.",
+    });
+    expect(mocks.prisma.course.update).not.toHaveBeenCalled();
   });
 
   it("rejects section creation for a course the instructor does not own", async () => {

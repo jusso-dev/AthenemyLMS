@@ -46,4 +46,39 @@ describe("lesson editor", () => {
       { type: "paragraph", text: "Paragraph" },
     ]);
   });
+
+  it("cleans imported slide fragments and image metadata", () => {
+    expect(
+      parseLessonMarkdown(
+        [
+          "- Wombat carers span",
+          "- weeks per burrow",
+          "- , involve",
+          "- multiple volunteers",
+          "- Paper notebook",
+          "- Glovebox notes",
+          "- Wombat Mange Carer Coordination",
+          "- 2 / 12",
+          "",
+          "![Icon](data:image/png;base64,abc){width=96 height=48}",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        type: "list",
+        items: [
+          "Wombat carers span weeks per burrow, involve multiple volunteers",
+          "Paper notebook",
+          "Glovebox notes",
+        ],
+      },
+      {
+        type: "image",
+        alt: "Icon",
+        src: "data:image/png;base64,abc",
+        width: 96,
+        height: 48,
+      },
+    ]);
+  });
 });

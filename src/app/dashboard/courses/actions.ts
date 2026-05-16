@@ -98,6 +98,15 @@ export async function updateCourseFormAction(
   );
 }
 
+export async function publishCourseFormAction(
+  courseId: string,
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _formData;
+  return runAction(() => publishCourseAction(courseId), "Course published.");
+}
+
 export async function createSectionFormAction(
   courseId: string,
   _previousState: ActionFormState,
@@ -493,6 +502,39 @@ export async function updateCourseAction(courseId: string, formData: FormData) {
     },
   });
 
+  revalidatePath("/dashboard/courses");
+  revalidatePath(`/dashboard/courses/${courseId}/edit`);
+}
+
+export async function publishCourseAction(courseId: string) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  if (!course || !canManageCourse(user, course)) {
+    throw new Error("You do not have permission to publish this course.");
+  }
+  if (course.status === "PUBLISHED") return;
+
+  const publishedAt = course.publishedAt ?? new Date();
+  const updatedCourse = await prisma.course.update({
+    where: { id: courseId },
+    data: {
+      status: "PUBLISHED",
+      publishedAt,
+    },
+  });
+
+  await sendCoursePublishedEmail({
+    to: user.email,
+    name: user.name ?? undefined,
+    courseTitle: updatedCourse.title,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/courses");
+  revalidatePath(`/courses/${updatedCourse.slug}`);
+  revalidatePath("/dashboard");
   revalidatePath("/dashboard/courses");
   revalidatePath(`/dashboard/courses/${courseId}/edit`);
 }

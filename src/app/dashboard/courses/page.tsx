@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { FileUp, LibraryBig, Plus, Search } from "lucide-react";
+import { FileUp, LibraryBig, Plus, Rocket, Search } from "lucide-react";
 import {
   ActionForm,
   PendingSubmitButton,
 } from "@/components/forms/action-form";
-import { importPresentationCourseFormAction } from "@/app/dashboard/courses/actions";
+import {
+  importPresentationCourseFormAction,
+  publishCourseFormAction,
+} from "@/app/dashboard/courses/actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -138,10 +141,21 @@ export default async function ManageCoursesPage({
               <Badge variant={course.status === "PUBLISHED" ? "success" : "outline"}>
                 {course.status}
               </Badge>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
                 <span className="text-sm font-medium">
                   {formatPrice(course.priceCents, course.currency)}
                 </span>
+                {course.status !== "PUBLISHED" ? (
+                  <ActionForm
+                    action={publishCourseFormAction.bind(null, course.id)}
+                    inlineMessage={false}
+                  >
+                    <PendingSubmitButton size="sm" pendingLabel="Publishing...">
+                      <Rocket className="h-4 w-4" />
+                      Publish
+                    </PendingSubmitButton>
+                  </ActionForm>
+                ) : null}
                 <Button asChild size="sm" variant="outline">
                   <Link href={`/dashboard/courses/${course.id}/edit`}>Edit</Link>
                 </Button>
