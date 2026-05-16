@@ -1,11 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ClipboardCheck, ListTree, Settings, Users } from "lucide-react";
+import {
+  BarChart3,
+  ClipboardCheck,
+  LayoutDashboard,
+  ListTree,
+  Settings,
+  Users,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const items = [
+  { key: "studio", label: "Studio", icon: LayoutDashboard },
   { key: "edit", label: "Details", icon: Settings },
   { key: "curriculum", label: "Curriculum", icon: ListTree },
   { key: "assessments", label: "Assessments", icon: ClipboardCheck },

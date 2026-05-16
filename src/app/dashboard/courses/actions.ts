@@ -26,6 +26,7 @@ import {
   buildPresentationCourseDraft,
   fetchGoogleSlidesAsPptx,
 } from "@/lib/presentation-import";
+import { getCoursePublishReadiness } from "@/lib/course-readiness";
 import {
   actionError,
   actionSuccess,
@@ -49,7 +50,7 @@ export async function createCourseAction(formData: FormData) {
   }
 
   revalidatePath("/dashboard/courses");
-  redirect(`/dashboard/courses/${courseId}/edit`);
+  redirect(`/dashboard/courses/${courseId}/studio`);
 }
 
 export async function createCourseFormAction(
@@ -67,7 +68,7 @@ export async function createCourseFormAction(
   }
 
   revalidatePath("/dashboard/courses");
-  redirect(`/dashboard/courses/${courseId}/edit`);
+  redirect(`/dashboard/courses/${courseId}/studio`);
 }
 
 export async function importPresentationCourseFormAction(
@@ -575,11 +576,39 @@ export async function publishCourseAction(courseId: string) {
   assertDatabaseConfigured();
 
   const user = await requireAppUser();
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: {
+      sections: {
+        include: {
+          lessons: {
+            select: {
+              title: true,
+              content: true,
+              videoUrl: true,
+              videoAssetKey: true,
+              durationMinutes: true,
+            },
+          },
+        },
+      },
+      assessments: {
+        select: { id: true, requiredForCompletion: true },
+      },
+    },
+  });
   if (!course || !canManageCourse(user, course)) {
     throw new Error("You do not have permission to publish this course.");
   }
   if (course.status === "PUBLISHED") return;
+  const readiness = getCoursePublishReadiness(course);
+  if (!readiness.canPublish) {
+    throw new Error(
+      `Course is not ready to publish: ${readiness.blockers
+        .map((item) => item.message)
+        .join(" ")}`,
+    );
+  }
 
   const publishedAt = course.publishedAt ?? new Date();
   const updatedCourse = await prisma.course.update({
