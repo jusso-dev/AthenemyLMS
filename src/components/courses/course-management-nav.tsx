@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   LayoutDashboard,
   ListTree,
+  PlugZap,
   Settings,
   Users,
 } from "lucide-react";
@@ -17,6 +18,7 @@ const items = [
   { key: "edit", label: "Details", icon: Settings },
   { key: "curriculum", label: "Curriculum", icon: ListTree },
   { key: "assessments", label: "Assessments", icon: ClipboardCheck },
+  { key: "interoperability", label: "Interop", icon: PlugZap },
   { key: "students", label: "Learners", icon: Users },
   { key: "insights", label: "Insights", icon: BarChart3 },
 ];

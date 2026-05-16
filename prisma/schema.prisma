@@ -101,6 +101,18 @@ enum OrganizationAssetKind {
   DOCUMENT
 }
 
+enum ExternalPackageType {
+  SCORM_12
+  XAPI
+  LTI
+}
+
+enum ExternalPackageStatus {
+  READY
+  INVALID
+  DISABLED
+}
+
 model User {
   id                      String                   @id @default(cuid())
   clerkId                 String                   @unique
@@ -122,32 +134,34 @@ model User {
   organizationMemberships OrganizationMembership[]
   sentInvitations         OrganizationInvitation[] @relation("InvitationInviter")
   uploadedAssets          OrganizationAsset[]      @relation("AssetUploader")
+  uploadedPackages        ExternalPackage[]        @relation("PackageUploader")
+  externalAttempts        ExternalPackageAttempt[]
 
   @@index([role])
 }
 
 model Course {
-  id                  String                 @id @default(cuid())
+  id                  String                   @id @default(cuid())
   instructorId        String
   title               String
-  slug                String                 @unique
+  slug                String                   @unique
   subtitle            String?
   description         String?
   thumbnailUrl        String?
-  priceCents          Int                    @default(0)
-  currency            String                 @default("usd")
-  status              CourseStatus           @default(DRAFT)
-  certificatesEnabled Boolean                @default(true)
-  level               String                 @default("Beginner")
-  durationMinutes     Int                    @default(0)
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  priceCents          Int                      @default(0)
+  currency            String                   @default("usd")
+  status              CourseStatus             @default(DRAFT)
+  certificatesEnabled Boolean                  @default(true)
+  level               String                   @default("Beginner")
+  durationMinutes     Int                      @default(0)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
   publishedAt         DateTime?
   archivedAt          DateTime?
   archivedById        String?
-  instructor          User                   @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
+  instructor          User                     @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
   organizationId      String?
-  organization        Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organization        Organization?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   sections            CourseSection[]
   enrollments         Enrollment[]
   payments            Payment[]
@@ -155,6 +169,8 @@ model Course {
   assessments         Assessment[]
   certificates        Certificate[]
   lifecycleEvents     CourseLifecycleEvent[]
+  externalPackages    ExternalPackage[]
+  externalAttempts    ExternalPackageAttempt[]
 
   @@index([instructorId, status])
   @@index([organizationId, status])
@@ -188,6 +204,7 @@ model Organization {
   courses      Course[]
   portal       OrganizationPortal?
   assets       OrganizationAsset[]
+  packages     ExternalPackage[]
 }
 
 model OrganizationAsset {
@@ -320,26 +337,82 @@ model CourseSection {
 }
 
 model Lesson {
-  id              String           @id @default(cuid())
-  sectionId       String
-  title           String
-  slug            String
-  content         String?
-  videoUrl        String?
-  videoProvider   VideoProvider?
-  videoAssetKey   String?
-  videoMimeType   String?
-  videoBytes      Int?
-  durationMinutes Int              @default(0)
-  preview         Boolean          @default(false)
-  position        Int              @default(0)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  section         CourseSection    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  resources       LessonResource[]
-  progress        LessonProgress[]
+  id               String                   @id @default(cuid())
+  sectionId        String
+  title            String
+  slug             String
+  content          String?
+  videoUrl         String?
+  videoProvider    VideoProvider?
+  videoAssetKey    String?
+  videoMimeType    String?
+  videoBytes       Int?
+  durationMinutes  Int                      @default(0)
+  preview          Boolean                  @default(false)
+  position         Int                      @default(0)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  section          CourseSection            @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  resources        LessonResource[]
+  progress         LessonProgress[]
+  externalPackages ExternalPackage[]
+  externalAttempts ExternalPackageAttempt[]
 
   @@unique([sectionId, slug])
+}
+
+model ExternalPackage {
+  id             String                   @id @default(cuid())
+  organizationId String?
+  courseId       String
+  lessonId       String?
+  uploadedById   String
+  type           ExternalPackageType
+  status         ExternalPackageStatus    @default(READY)
+  title          String
+  identifier     String?
+  version        String?
+  storageKey     String?
+  launchPath     String?
+  launchUrl      String?
+  manifest       Json?
+  validationLog  String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  organization   Organization?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  course         Course                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson         Lesson?                  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  uploadedBy     User                     @relation("PackageUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  attempts       ExternalPackageAttempt[]
+
+  @@index([courseId, type, status])
+  @@index([lessonId, status])
+  @@index([organizationId, type])
+}
+
+model ExternalPackageAttempt {
+  id               String          @id @default(cuid())
+  packageId        String
+  userId           String
+  courseId         String
+  lessonId         String?
+  completionStatus String          @default("unknown")
+  successStatus    String?
+  scoreScaled      Float?
+  scoreRaw         Float?
+  totalTimeSeconds Int             @default(0)
+  suspendData      String?
+  lastStatement    Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  package          ExternalPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course           Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson           Lesson?         @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@unique([packageId, userId])
+  @@index([courseId, completionStatus])
+  @@index([lessonId, completionStatus])
 }
 
 model LessonResource {
