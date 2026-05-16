@@ -59,6 +59,13 @@ export const assessmentSchema = z.object({
   requiredForCompletion: z.coerce.boolean().default(false),
 });
 
+export const assessmentSettingsSchema = z.object({
+  title: z.string().min(3).max(140),
+  description: z.string().max(1000).optional().or(z.literal("")),
+  passingScore: z.coerce.number().int().min(1).max(100).default(70),
+  requiredForCompletion: z.coerce.boolean().default(false),
+});
+
 export const organizationSchema = z.object({
   name: z.string().min(2).max(120),
   supportEmail: z.string().email().optional().or(z.literal("")),

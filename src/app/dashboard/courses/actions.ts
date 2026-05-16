@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   assessmentSchema,
+  assessmentSettingsSchema,
   courseSchema,
   lessonContentSchema,
   lessonSchema,
@@ -156,6 +157,18 @@ export async function createAssessmentFormAction(
   return runAction(
     () => createAssessmentAction(courseId, formData),
     "Assessment created.",
+  );
+}
+
+export async function updateAssessmentFormAction(
+  courseId: string,
+  assessmentId: string,
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  return runAction(
+    () => updateAssessmentAction(courseId, assessmentId, formData),
+    "Assessment saved.",
   );
 }
 
@@ -621,6 +634,47 @@ export async function createAssessmentAction(
   });
 
   revalidatePath(`/dashboard/courses/${courseId}/assessments`);
+  revalidatePath(`/dashboard/learn/${courseId}`);
+}
+
+export async function updateAssessmentAction(
+  courseId: string,
+  assessmentId: string,
+  formData: FormData,
+) {
+  assertDatabaseConfigured();
+
+  const user = await requireAppUser();
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    include: { course: true },
+  });
+  if (!assessment || assessment.courseId !== courseId) {
+    throw new Error("Assessment not found.");
+  }
+  if (!canManageCourse(user, assessment.course)) {
+    throw new Error("You do not have permission to manage this assessment.");
+  }
+
+  const parsed = assessmentSettingsSchema.parse({
+    title: formData.get("title"),
+    description: formData.get("description") ?? "",
+    passingScore: formData.get("passingScore"),
+    requiredForCompletion: formData.get("requiredForCompletion") === "on",
+  });
+
+  await prisma.assessment.update({
+    where: { id: assessmentId },
+    data: {
+      title: parsed.title,
+      description: parsed.description || null,
+      passingScore: parsed.passingScore,
+      requiredForCompletion: parsed.requiredForCompletion,
+    },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}/assessments`);
+  revalidatePath(`/dashboard/courses/${courseId}/assessments/${assessmentId}`);
   revalidatePath(`/dashboard/learn/${courseId}`);
 }
 

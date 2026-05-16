@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { ClipboardCheck, Plus } from "lucide-react";
 import { CourseManagementNav } from "@/components/courses/course-management-nav";
 import { PageHeader } from "@/components/layout/page-header";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -140,12 +142,25 @@ export default async function CourseAssessmentsPage({
           ) : null}
           {course?.assessments.map((assessment) => (
             <div key={assessment.id} className="rounded-md border p-4">
-              <p className="font-medium">{assessment.title}</p>
-              <p className="text-sm text-muted-foreground">
-                {assessment.questions.length} question ·{" "}
-                {assessment.passingScore}% to pass
-                {assessment.requiredForCompletion ? " · completion gate" : ""}
-              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium">{assessment.title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {assessment.questions.length} question ·{" "}
+                    {assessment.passingScore}% to pass
+                    {assessment.requiredForCompletion
+                      ? " · completion gate"
+                      : ""}
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link
+                    href={`/dashboard/courses/${courseId}/assessments/${assessment.id}`}
+                  >
+                    Manage
+                  </Link>
+                </Button>
+              </div>
             </div>
           ))}
         </CardContent>
