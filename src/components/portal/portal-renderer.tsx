@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { BookOpen, CheckCircle2, GraduationCap } from "lucide-react";
+import {
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  GraduationCap,
+} from "lucide-react";
 import { CourseCard } from "@/components/course-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -38,22 +43,25 @@ export function PortalShell({
   children: React.ReactNode;
 }) {
   const rootStyle = {
-    "--primary": theme.primaryColor,
-    "--primary-dark": theme.primaryColor,
-    "--secondary": theme.accentColor,
-    "--ring": theme.primaryColor,
+    "--portal-primary": theme.primaryColor,
+    "--portal-accent": theme.accentColor,
+    "--primary": "var(--portal-primary)",
+    "--primary-dark": "color-mix(in oklab, var(--portal-primary) 82%, black)",
+    "--primary-foreground": "var(--portal-primary-foreground)",
+    "--secondary": "var(--portal-accent)",
+    "--ring": "var(--portal-primary-text)",
   } as React.CSSProperties;
 
   return (
     <div
       className={cn(
-        "min-h-screen bg-background text-foreground",
+        "portal-surface min-h-screen bg-[color:var(--portal-background)] text-foreground",
         theme.fontFamily === "serif" && "font-serif",
         theme.fontFamily === "mono" && "font-mono",
       )}
       style={rootStyle}
     >
-      <header className="border-b bg-card">
+      <header className="border-b border-[color:var(--portal-border)] bg-[color:var(--portal-chrome)]">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <Link
             href={`/s/${organizationSlug}`}
@@ -67,7 +75,7 @@ export function PortalShell({
                 className="h-9 w-9 rounded-md object-cover"
               />
             ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground">
+              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[color:var(--portal-primary)] text-sm font-semibold text-[color:var(--portal-primary-foreground)]">
                 {organizationName.slice(0, 1).toUpperCase()}
               </span>
             )}
@@ -81,7 +89,7 @@ export function PortalShell({
               <Link
                 key={`${link.label}-${link.href}`}
                 href={resolvePortalHref(link.href, organizationSlug)}
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-[color:var(--portal-panel)] hover:text-foreground"
               >
                 {link.label}
               </Link>
@@ -95,7 +103,7 @@ export function PortalShell({
         </div>
       </header>
       {children}
-      <footer className="border-t bg-card">
+      <footer className="border-t border-[color:var(--portal-border)] bg-[color:var(--portal-chrome)]">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <p>{organizationName}</p>
           <div className="flex flex-wrap gap-3">
@@ -164,11 +172,11 @@ function PortalBlockSection({
 }) {
   if (type === "HERO") {
     return (
-      <section className="border-b bg-card">
+      <section className="border-b border-[color:var(--portal-border)] bg-[color:var(--portal-hero)]">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_380px] lg:px-8">
           <div>
             {config.eyebrow ? (
-              <p className="text-sm font-medium text-primary">
+              <p className="text-sm font-medium text-[color:var(--portal-primary-text)]">
                 {config.eyebrow}
               </p>
             ) : null}
@@ -196,15 +204,15 @@ function PortalBlockSection({
               </Button>
             ) : null}
           </div>
-          <div className="rounded-lg border bg-background p-4">
+          <div className="rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-panel)] p-4">
             <div className="space-y-3">
               {(courses.length ? courses.slice(0, 3) : demoCourseRows()).map(
                 (course) => (
                   <div
                     key={course.slug}
-                    className="flex items-start gap-3 rounded-md border bg-card p-3"
+                    className="flex items-start gap-3 rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-3"
                   >
-                    <BookOpen className="mt-0.5 h-4 w-4 text-primary" />
+                    <BookOpen className="mt-0.5 h-4 w-4 text-[color:var(--portal-primary-text)]" />
                     <div>
                       <p className="text-sm font-medium">{course.title}</p>
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
@@ -255,13 +263,29 @@ function PortalBlockSection({
     );
   }
 
-  if (type === "FAQ" || type === "TESTIMONIALS") {
+  if (type === "FAQ") {
     return (
       <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <SectionHeading config={config} />
         <div className="mt-6 space-y-3">
           {(config.items ?? []).map((item) => (
-            <div key={item} className="rounded-md border bg-card p-4">
+            <FaqItem key={item} item={item} />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (type === "TESTIMONIALS") {
+    return (
+      <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+        <SectionHeading config={config} />
+        <div className="mt-6 space-y-3">
+          {(config.items ?? []).map((item) => (
+            <div
+              key={item}
+              className="rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-4"
+            >
               <p className="text-sm leading-6 text-muted-foreground">{item}</p>
             </div>
           ))}
@@ -273,7 +297,7 @@ function PortalBlockSection({
   if (type === "CTA" || type === "LOGIN_SIGNUP") {
     return (
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-lg border bg-card p-6 sm:p-8">
+        <div className="rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-6 sm:p-8">
           <SectionHeading config={config} />
           {config.ctaLabel ? (
             <Button asChild className="mt-6">
@@ -298,7 +322,7 @@ function PortalBlockSection({
         <ul className="mt-5 space-y-3">
           {config.items.map((item) => (
             <li key={item} className="flex gap-3 text-sm text-muted-foreground">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 text-[color:var(--portal-primary-text)]" />
               <span>{item}</span>
             </li>
           ))}
@@ -312,7 +336,9 @@ function SectionHeading({ config }: { config: PortalBlockConfig }) {
   return (
     <div>
       {config.eyebrow ? (
-        <p className="text-sm font-medium text-primary">{config.eyebrow}</p>
+        <p className="text-sm font-medium text-[color:var(--portal-primary-text)]">
+          {config.eyebrow}
+        </p>
       ) : null}
       {config.heading ? (
         <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-tight">
@@ -326,6 +352,36 @@ function SectionHeading({ config }: { config: PortalBlockConfig }) {
       ) : null}
     </div>
   );
+}
+
+function FaqItem({ item }: { item: string }) {
+  const { question, answer } = splitFaqItem(item);
+
+  return (
+    <details className="group rounded-md border border-[color:var(--portal-border)] bg-[color:var(--portal-card)] p-4">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium marker:hidden">
+        <span>{question}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{answer}</p>
+    </details>
+  );
+}
+
+function splitFaqItem(item: string) {
+  const questionEnd = item.indexOf("?");
+  if (questionEnd === -1) {
+    return {
+      question: item,
+      answer: "More details will be added by the portal administrator.",
+    };
+  }
+  const question = item.slice(0, questionEnd + 1).trim();
+  const answer = item.slice(questionEnd + 1).trim();
+  return {
+    question,
+    answer: answer || "More details will be added by the portal administrator.",
+  };
 }
 
 export function portalCtaHref(
