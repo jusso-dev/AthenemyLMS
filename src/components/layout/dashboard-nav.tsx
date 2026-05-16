@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  BarChart3,
   BookOpen,
   CreditCard,
   GraduationCap,
@@ -17,6 +18,7 @@ const nav = [
   { href: "/dashboard", label: "Overview", icon: Home, exact: true },
   { href: "/dashboard/my-courses", label: "My courses", icon: GraduationCap },
   { href: "/dashboard/courses", label: "Manage", icon: BookOpen },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/site", label: "Portal", icon: LayoutTemplate },
   { href: "/dashboard/admin", label: "Admin", icon: ShieldCheck },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },

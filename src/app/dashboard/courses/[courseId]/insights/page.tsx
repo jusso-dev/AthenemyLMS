@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Download } from "lucide-react";
 import { CourseManagementNav } from "@/components/courses/course-management-nav";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { canManageCourse } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 import { SetupMessage } from "@/lib/setup-message";
+import { getLearnerRiskSignal } from "@/lib/analytics";
 
 export default async function CourseInsightsPage({
   searchParams,
@@ -69,7 +70,12 @@ export default async function CourseInsightsPage({
         where: { id: courseId },
         include: {
           sections: {
-            include: { lessons: { select: { id: true } } },
+            include: {
+              lessons: {
+                orderBy: { position: "asc" },
+                select: { id: true, title: true },
+              },
+            },
           },
           enrollments: {
             where: { status: { in: ["ACTIVE", "COMPLETED"] } },
@@ -103,7 +109,8 @@ export default async function CourseInsightsPage({
               in: enrollmentUserIds,
             },
           },
-          select: { userId: true, lessonId: true },
+          select: { userId: true, lessonId: true, lastSeenAt: true },
+          orderBy: { lastSeenAt: "desc" },
         })
       : [];
   const totalRevenue = course
@@ -130,6 +137,25 @@ export default async function CourseInsightsPage({
       const certificate = course.certificates.find(
         (item) => item.userId === enrollment.userId,
       );
+      const lastActivityAt =
+        progress.find((item) => item.userId === enrollment.userId)
+          ?.lastSeenAt ?? enrollment.updatedAt;
+      const failedRequiredAssessments = course.assessments
+        .filter((assessment) => assessment.requiredForCompletion)
+        .flatMap((assessment) =>
+          assessment.submissions.filter(
+            (submission) =>
+              submission.userId === enrollment.userId && !submission.passed,
+          ),
+        ).length;
+      const risk = getLearnerRiskSignal({
+        progressPercent: lessonIds.length
+          ? Math.round((completedLessons / lessonIds.length) * 100)
+          : 0,
+        enrolledAt: enrollment.createdAt,
+        lastActivityAt,
+        failedRequiredAssessments,
+      });
 
       return {
         user: enrollment.user,
@@ -142,6 +168,7 @@ export default async function CourseInsightsPage({
           .length,
         totalSubmissions: submissions.length,
         certificate,
+        risk,
       };
     }) ?? [];
   const filteredLearnerRows = learnerRows.filter((row) => {
@@ -180,6 +207,25 @@ export default async function CourseInsightsPage({
           learnerRows.filter((row) => row.averageScore !== null).length,
       )
     : 0;
+  const atRiskCount = learnerRows.filter(
+    (row) => row.risk.level !== "low",
+  ).length;
+  const lessonEngagement =
+    course?.sections.flatMap((section) =>
+      section.lessons.map((lesson) => {
+        const completions = progress.filter(
+          (item) => item.lessonId === lesson.id,
+        ).length;
+        return {
+          id: lesson.id,
+          title: lesson.title,
+          completions,
+          rate: learnerRows.length
+            ? Math.round((completions / learnerRows.length) * 100)
+            : 0,
+        };
+      }),
+    ) ?? [];
 
   return (
     <div className="space-y-6">
@@ -193,6 +239,16 @@ export default async function CourseInsightsPage({
         eyebrow={course?.title}
         title="Insights"
         description="Gradebook-style progress, assessment, certificate, and revenue reporting."
+        actions={
+          course && allowed ? (
+            <Button asChild variant="outline">
+              <Link href={`/api/courses/${course.id}/reports/completions`}>
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Link>
+            </Button>
+          ) : null
+        }
       />
       <CourseManagementNav courseId={courseId} />
       {!allowed ? (
@@ -212,6 +268,7 @@ export default async function CourseInsightsPage({
               { label: "Completion rate", value: `${completionRate}%` },
               { label: "Avg. score", value: `${averageAssessmentScore}%` },
               { label: "Revenue", value: formatPrice(totalRevenue) },
+              { label: "At risk", value: atRiskCount },
             ].map((stat) => (
               <Card key={stat.label}>
                 <CardContent className="p-5">
@@ -221,6 +278,36 @@ export default async function CourseInsightsPage({
               </Card>
             ))}
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Lesson engagement</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {lessonEngagement.length === 0 ? (
+                <EmptyState
+                  icon={BarChart3}
+                  title="No lesson engagement yet"
+                  description="Lesson completion data will appear once learners start progressing."
+                />
+              ) : null}
+              {lessonEngagement.map((lesson) => (
+                <div
+                  key={lesson.id}
+                  className="grid gap-3 rounded-md border p-4 md:grid-cols-[1fr_180px_90px]"
+                >
+                  <p className="font-medium">{lesson.title}</p>
+                  <div>
+                    <Progress value={lesson.rate} />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {lesson.completions}/{learnerRows.length} learners
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium">{lesson.rate}%</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -320,17 +407,25 @@ export default async function CourseInsightsPage({
                   </div>
                   <div className="text-sm">
                     <p className="font-medium">
-                      {row.averageScore === null ? "No score" : `${row.averageScore}%`}
+                      {row.averageScore === null
+                        ? "No score"
+                        : `${row.averageScore}%`}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {row.passedAssessments}/{row.totalSubmissions} passed
                     </p>
                   </div>
                   <Badge
-                    variant={row.certificate ? "success" : "outline"}
+                    variant={
+                      row.risk.level === "high"
+                        ? "outline"
+                        : row.certificate
+                          ? "success"
+                          : "outline"
+                    }
                     className="w-fit"
                   >
-                    {row.certificate ? "Issued" : "Pending"}
+                    {row.certificate ? "Issued" : row.risk.label}
                   </Badge>
                 </div>
               ))}
