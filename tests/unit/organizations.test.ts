@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
     organizationMembership: {
       upsert: vi.fn(),
     },
+    course: { findMany: vi.fn() },
+    enrollment: { createMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -28,6 +30,8 @@ describe("organizations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.prisma.$transaction.mockResolvedValue([]);
+    mocks.prisma.course.findMany.mockResolvedValue([]);
+    mocks.prisma.enrollment.createMany.mockResolvedValue({ count: 0 });
   });
 
   it("creates stable invitation tokens", () => {
@@ -50,7 +54,10 @@ describe("organizations", () => {
   it("creates an organisation with owner membership", async () => {
     mocks.prisma.user.update.mockReturnValue({ user: true });
     mocks.prisma.organization.create.mockReturnValue({ organization: true });
-    mocks.prisma.$transaction.mockResolvedValue([{ user: true }, { organization: true }]);
+    mocks.prisma.$transaction.mockResolvedValue([
+      { user: true },
+      { organization: true },
+    ]);
 
     await createOrganizationForUser({
       name: "Athenemy Studio",
@@ -85,8 +92,12 @@ describe("organizations", () => {
       status: "PENDING",
       expiresAt,
     });
-    mocks.prisma.organizationMembership.upsert.mockReturnValue({ membership: true });
-    mocks.prisma.organizationInvitation.update.mockReturnValue({ invitation: true });
+    mocks.prisma.organizationMembership.upsert.mockReturnValue({
+      membership: true,
+    });
+    mocks.prisma.organizationInvitation.update.mockReturnValue({
+      invitation: true,
+    });
 
     await acceptInvitation({
       token: "token",

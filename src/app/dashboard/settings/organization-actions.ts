@@ -20,6 +20,7 @@ import {
   hasOrgRole,
   type OrgRole,
 } from "@/lib/organizations";
+import { defaultCourseTemplates } from "@/lib/course-templates";
 import {
   actionError,
   actionSuccess,
@@ -72,6 +73,7 @@ export async function createOnboardingOrganizationAction(formData: FormData) {
     name: parsed.name,
     supportEmail: parsed.supportEmail || user.email,
     userId: user.id,
+    starterTemplateIds: selectedStarterTemplates(formData),
   });
 
   revalidatePath("/dashboard");
@@ -356,6 +358,16 @@ function ownerCount(organizationId: string) {
   return prisma.organizationMembership.count({
     where: { organizationId, role: "OWNER" },
   });
+}
+
+function selectedStarterTemplates(formData: FormData) {
+  const selected = formData
+    .getAll("starterTemplateIds")
+    .map(String)
+    .filter((id) =>
+      defaultCourseTemplates.some((template) => template.id === id),
+    );
+  return selected;
 }
 
 async function runAction(

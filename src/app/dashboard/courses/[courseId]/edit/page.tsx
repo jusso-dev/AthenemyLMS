@@ -88,6 +88,36 @@ export default async function EditCoursePage({
         }
       />
       <CourseManagementNav courseId={courseId} />
+      {course?.sourceTemplateId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Template source</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm sm:grid-cols-3">
+            <div className="rounded-md border bg-muted/20 p-3">
+              <p className="font-medium">Based on Athenemy template</p>
+              <p className="mt-1 text-muted-foreground">
+                {course.sourceTemplateId}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/20 p-3">
+              <p className="font-medium">Version</p>
+              <p className="mt-1 text-muted-foreground">
+                {course.sourceTemplateVersion ?? "Unknown"}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/20 p-3">
+              <p className="font-medium">Required learning</p>
+              <p className="mt-1 text-muted-foreground">
+                {course.requiredForMembers ? "Required" : "Recommended"} ·{" "}
+                {course.autoEnrollFutureMembers
+                  ? "Future members auto-enroll"
+                  : "Manual enrollment"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Listing and publishing</CardTitle>

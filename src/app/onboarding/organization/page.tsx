@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createOnboardingOrganizationAction } from "@/app/dashboard/settings/organization-actions";
 import { getCurrentAppUser, isClerkConfigured } from "@/lib/auth";
+import { defaultCourseTemplates } from "@/lib/course-templates";
 import { missingEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { SetupMessage } from "@/lib/setup-message";
@@ -70,6 +71,37 @@ export default async function OrganizationOnboardingPage() {
                 defaultValue={user?.email ?? ""}
                 disabled={!hasDatabase || !user}
               />
+              <fieldset className="grid gap-3 rounded-md border bg-muted/20 p-4">
+                <legend className="px-1 text-sm font-medium">
+                  Start with common training courses
+                </legend>
+                <p className="text-sm text-muted-foreground">
+                  Selected courses are editable copies and can be changed,
+                  archived, or deleted later.
+                </p>
+                {defaultCourseTemplates.slice(0, 5).map((template) => (
+                  <label
+                    key={template.id}
+                    className="flex items-start gap-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="starterTemplateIds"
+                      value={template.id}
+                      defaultChecked={template.requiredSuggestion}
+                      disabled={!hasDatabase || !user}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="font-medium">{template.title}</span>
+                      <span className="block text-muted-foreground">
+                        {template.category} ·{" "}
+                        {template.suggestedDurationMinutes} min
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
               <Button disabled={!hasDatabase || !user}>
                 Create organisation
               </Button>

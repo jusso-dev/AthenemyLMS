@@ -6,7 +6,16 @@
 
 Wisdom, structured into courses.
 
-Athenemy is a modern self-hostable LMS for creators, teams, and small organisations. It provides a production-oriented MVP for selling, delivering, and tracking online courses with a clean Next.js app, role-aware dashboards, Supabase Postgres persistence, Clerk authentication, Cloudflare R2 uploads, and Stripe payments.
+Athenemy is a modern self-hostable LMS for creators, teams, and small organisations. It provides a production-oriented MVP for selling, delivering, and tracking online courses with a clean Next.js app, role-aware dashboards, Supabase Postgres persistence, Clerk authentication, Cloudflare R2 uploads, Stripe payments, a starter course library, and integration foundations.
+
+## Current Capabilities
+
+- Course authoring with sections, lessons, Markdown content, resources, video URLs, R2-hosted video uploads, assessments, completion gates, certificates, import/export, and lifecycle controls.
+- Organization workspaces with memberships, invitations, roles, onboarding, branded portals, media assets, and public course catalogues.
+- Default course library for editable starter training such as cybersecurity awareness, phishing awareness, password/MFA hygiene, acceptable use, incident response, and data privacy.
+- Developer platform foundations: organization-scoped API keys, scoped `/api/v1` endpoints, consistent JSON errors, pagination, and webhook endpoint management.
+- Automation foundations: learning event log, automation rules, automation runs, notification delivery records, built-in recipe definitions, and Trigger.dev readiness state.
+- Enterprise, commerce, and social learning foundations: audit logs, privacy settings, custom role capability presets, bundles, coupons, cohorts, discussions, and live sessions.
 
 ## Tech Stack
 
@@ -52,6 +61,7 @@ Use `.env.example` as the source of truth. The main required groups are:
 - Clerk: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`
 - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - Cloudflare R2: account, access key, secret, bucket, public base URL
+- Trigger.dev, optional: `TRIGGER_SECRET_KEY` or `TRIGGER_API_KEY`
 
 See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 
@@ -84,9 +94,13 @@ Add screenshots after first deployment:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Accessibility Audit](docs/ACCESSIBILITY_AUDIT.md)
+- [Automations](docs/AUTOMATIONS.md)
 - [Course Import and Export](docs/COURSE_IMPORT_EXPORT.md)
+- [Default Course Library](docs/DEFAULT_COURSE_LIBRARY.md)
+- [Developer Platform](docs/DEVELOPER_PLATFORM.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Deployment](docs/DEPLOYMENT.md)
+- [Enterprise, Commerce, and Social Learning](docs/ENTERPRISE_COMMERCE_SOCIAL.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Environment](docs/ENVIRONMENT.md)
 - [Email Setup](docs/EMAIL_SETUP.md)

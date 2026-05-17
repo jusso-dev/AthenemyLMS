@@ -63,6 +63,10 @@ npm run db:migrate
 - `EMAIL_FROM`: verified sender identity, for example `Athenemy <hello@yourdomain.com>`.
 - `RESEND_API_KEY`: required when `EMAIL_PROVIDER=resend`.
 
+### Automations
+
+- `TRIGGER_SECRET_KEY` or `TRIGGER_API_KEY`: optional. When present, `/dashboard/automations` reports Trigger.dev as configured. Athenemy still stores learning events, rules, runs, notification deliveries, and webhook delivery state in Postgres.
+
 ## Secret Hygiene
 
 `.env`, `.env.local`, and production env files are ignored by Git. Keep real values in local files or your deployment platform secret manager.

@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
 import type { Role } from "@/lib/permissions";
+import {
+  autoEnrollFutureMember,
+  instantiateDefaultCourseTemplate,
+} from "@/lib/course-templates";
 
 export type OrgRole = "OWNER" | "ADMIN" | "INSTRUCTOR" | "MEMBER";
 
@@ -32,6 +36,7 @@ export async function createOrganizationForUser(input: {
   name: string;
   supportEmail?: string;
   userId: string;
+  starterTemplateIds?: string[];
 }) {
   const baseSlug = slugify(input.name);
   const slug = `${baseSlug}-${createInvitationToken().slice(0, 6)}`;
@@ -55,6 +60,17 @@ export async function createOrganizationForUser(input: {
       },
     }),
   ]);
+
+  for (const templateId of input.starterTemplateIds ?? []) {
+    await instantiateDefaultCourseTemplate({
+      organizationId: organization.id,
+      instructorId: input.userId,
+      templateId,
+      required: true,
+      autoEnrollExisting: true,
+      autoEnrollFuture: true,
+    });
+  }
 
   return organization;
 }
@@ -98,4 +114,9 @@ export async function acceptInvitation(input: {
       data: { status: "ACCEPTED", acceptedAt: new Date() },
     }),
   ]);
+
+  await autoEnrollFutureMember({
+    organizationId: invitation.organizationId,
+    userId: input.userId,
+  });
 }

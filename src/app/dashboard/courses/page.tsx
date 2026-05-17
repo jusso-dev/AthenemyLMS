@@ -46,12 +46,23 @@ export default async function ManageCoursesPage({
         title="Courses"
         description="Create, edit, publish, and inspect the learning products in your catalogue."
         actions={
-          <Button asChild>
-            <Link href="/dashboard/courses/new">
-              <Plus className="h-4 w-4" />
-              New course
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/dashboard/courses/library">
+                <LibraryBig className="h-4 w-4" />
+                Course library
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/dashboard/courses/social">Social learning</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/dashboard/courses/new">
+                <Plus className="h-4 w-4" />
+                New course
+              </Link>
+            </Button>
+          </div>
         }
       />
       <form className="relative max-w-sm">

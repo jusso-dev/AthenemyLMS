@@ -278,6 +278,8 @@ describe("dashboard course actions", () => {
         status: "ARCHIVED",
         archivedAt: expect.any(Date),
         archivedById: "user_1",
+        autoEnrollMembers: false,
+        autoEnrollFutureMembers: false,
       },
     });
     expect(mocks.prisma.courseLifecycleEvent.create).toHaveBeenCalledWith({

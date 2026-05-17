@@ -26,6 +26,7 @@ import {
   buildPresentationCourseDraft,
   fetchGoogleSlidesAsPptx,
 } from "@/lib/presentation-import";
+import { instantiateDefaultCourseTemplate } from "@/lib/course-templates";
 import { getCoursePublishReadiness } from "@/lib/course-readiness";
 import { parseScorm12Manifest } from "@/lib/scorm";
 import {
@@ -88,6 +89,16 @@ export async function importPresentationCourseFormAction(
 
   revalidatePath("/dashboard/courses");
   redirect(`/dashboard/courses/${courseId}/curriculum`);
+}
+
+export async function enableCourseTemplateFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+): Promise<ActionFormState> {
+  return runAction(
+    () => enableCourseTemplateAction(formData),
+    "Default course enabled.",
+  );
 }
 
 export async function updateCourseFormAction(
@@ -561,6 +572,39 @@ async function primaryOrganizationIdForUser(userId: string) {
   return membership?.organizationId ?? null;
 }
 
+async function enableCourseTemplateAction(formData: FormData) {
+  assertDatabaseConfigured();
+  const user = await requireAppUser();
+  if (!hasRole(user.role, "INSTRUCTOR")) {
+    throw new Error("Instructor or admin role required.");
+  }
+  const templateId = String(formData.get("templateId") ?? "");
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const membership = await prisma.organizationMembership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId,
+        userId: user.id,
+      },
+    },
+  });
+  if (!membership && user.role !== "ADMIN") {
+    throw new Error("Organisation membership is required.");
+  }
+
+  await instantiateDefaultCourseTemplate({
+    organizationId,
+    instructorId: user.id,
+    templateId,
+    required: formData.get("required") === "on",
+    autoEnrollExisting: formData.get("autoEnrollExisting") === "on",
+    autoEnrollFuture: formData.get("autoEnrollFuture") === "on",
+  });
+
+  revalidatePath("/dashboard/courses");
+  revalidatePath("/dashboard/courses/library");
+}
+
 export async function issueCertificateAction(courseId: string) {
   assertDatabaseConfigured();
 
@@ -731,6 +775,8 @@ export async function archiveCourseAction(courseId: string) {
       status: "ARCHIVED",
       archivedAt: new Date(),
       archivedById: user.id,
+      autoEnrollMembers: false,
+      autoEnrollFutureMembers: false,
     },
   });
 

@@ -21,3 +21,14 @@ Cloudflare Stream adds transcoding, adaptive playback, and stronger delivery con
 For R2 uploads, configure the Cloudflare R2 env group in `.env.local` and set bucket CORS to allow browser `PUT` uploads from `NEXT_PUBLIC_APP_URL`.
 
 Instructors can attach either an external playback URL or upload a direct R2 video file from the lesson video screen. Video metadata is stored on `Lesson.videoProvider`, `Lesson.videoAssetKey`, `Lesson.videoMimeType`, and `Lesson.videoBytes`.
+
+## Supported Playback
+
+The lesson player uses `src/lib/video.ts` to choose the renderer:
+
+- YouTube URLs render through `https://www.youtube-nocookie.com/embed/...`.
+- Vimeo URLs render through `https://player.vimeo.com/video/...`.
+- Direct `.mp4`, `.webm`, `.mov`, and `.m4v` URLs render with native `<video controls>`.
+- Other valid URLs render in an `<iframe>`.
+
+Because arbitrary iframe URLs are currently accepted, deployments with strict content policies should add a provider allowlist before exposing untrusted instructor content.

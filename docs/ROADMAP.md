@@ -1,17 +1,28 @@
 # Roadmap
 
-## GitHub Issues To Create
+## Implemented Foundations
 
-- Email integration: choose Resend, Postmark, or SES and replace `src/lib/email/index.ts` stubs.
-- Rich lesson editor: add markdown or block editor support for lessons.
-- Video processing: decide whether R2 stores originals only or integrates with Cloudflare Stream.
-- Assessments: add quizzes, assignments, and completion gates.
-- Certificates: generate course completion certificates.
-- Organisation tenancy: add teams, invitations, and organisation-scoped roles.
-- Billing portal: add Stripe customer portal support.
-- Analytics hardening: expand persisted rollups and reporting coverage.
-- Accessibility audit: run keyboard, screen reader, contrast, and reduced-motion checks.
-- Import/export: support course backup and migration between self-hosted installs.
+- Default course library with editable starter courses and onboarding selection.
+- Branded organization portal builder and public organization routes.
+- Course authoring, rich lesson content, video URLs, R2-hosted video uploads, assessments, completion gates, certificates, import/export, and lifecycle controls.
+- Organization tenancy with memberships, invitations, role-aware dashboards, and portal media assets.
+- Developer platform foundation with organization API keys, scoped `/api/v1` endpoints, webhook endpoint records, and webhook signing helpers.
+- Automation foundation with persisted learning events, rules, runs, delivery records, recipe definitions, and Trigger.dev readiness state.
+- Enterprise readiness foundation with audit logs, custom role capability presets, and privacy settings.
+- Commerce foundation with bundles and coupons alongside existing Stripe checkout and billing portal flows.
+- Social learning foundation with cohorts, discussions, and live sessions.
+
+## Remaining Work
+
+- Replace automation recipe definitions with full editable UI controls and real Trigger.dev task execution.
+- Add webhook delivery execution, retries, replay, and delivery detail inspection.
+- Expand public API coverage and publish an OpenAPI spec.
+- Add API request logging and admin-side revoke/rotation controls for API keys.
+- Add full commerce checkout flows for bundles, coupon redemption, subscriptions, and affiliate attribution.
+- Add cohort creation/edit forms, discussion posting UI, moderation controls, announcements, and live-session attendance.
+- Add enterprise export flows, custom role assignment UI, MFA policy integration, and retention enforcement.
+- Decide whether R2 direct video files are enough or Cloudflare Stream/adaptive playback is needed.
+- Continue accessibility audits as dashboard surface area grows.
 
 ## MVP Gaps
 

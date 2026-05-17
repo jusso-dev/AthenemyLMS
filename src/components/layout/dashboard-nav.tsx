@@ -7,9 +7,12 @@ import {
   CreditCard,
   GraduationCap,
   Home,
+  KeyRound,
   LayoutTemplate,
   Settings,
   ShieldCheck,
+  Store,
+  Workflow,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -20,6 +23,9 @@ const nav = [
   { href: "/dashboard/courses", label: "Manage", icon: BookOpen },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/site", label: "Portal", icon: LayoutTemplate },
+  { href: "/dashboard/automations", label: "Automations", icon: Workflow },
+  { href: "/dashboard/commerce", label: "Commerce", icon: Store },
+  { href: "/dashboard/developer", label: "Developer", icon: KeyRound },
   { href: "/dashboard/admin", label: "Admin", icon: ShieldCheck },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },

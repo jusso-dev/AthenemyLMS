@@ -7,7 +7,7 @@ Athenemy is a Next.js 16 App Router application with server-first routes and exp
 - `src/app`: public pages, dashboard pages, and API routes.
 - `src/components`: brand, layout, forms, and reusable UI primitives.
 - `src/lib`: env validation, auth helpers, permissions, service clients, schemas, and utilities.
-- `prisma/schema.prisma`: LMS domain model for users, courses, lessons, resources, enrollments, progress, and payments.
+- `prisma/schema.prisma`: LMS domain model for users, courses, lessons, resources, enrollments, progress, payments, organizations, portals, seeded templates, API keys, webhooks, automations, audit logs, commerce records, cohorts, discussions, and live sessions.
 
 ## Lesson Authoring
 
@@ -20,6 +20,7 @@ Lesson bodies are authored as Markdown through `src/components/forms/rich-lesson
 - Stripe Checkout creates paid enrollments after verified webhook events.
 - Cloudflare R2 stores thumbnails, resources, and optional lesson files through signed upload URLs.
 - Transactional email is routed through `src/lib/email/index.ts`, using safe stub delivery in local/test mode and Resend when configured.
+- Trigger.dev is an optional orchestration layer for automation jobs. Athenemy keeps events, rules, runs, delivery attempts, and webhook state in Postgres so self-hosters can inspect and replace the execution backend later.
 
 ## Analytics
 
@@ -28,6 +29,22 @@ Instructor and admin dashboards read analytics through `src/lib/analytics.ts`. T
 ## Video
 
 Lesson videos use a hybrid strategy documented in `docs/VIDEO_STRATEGY.md`: external embed URLs for fast setup and R2-hosted MP4/WebM uploads for self-hosted files. The lesson player renders YouTube, Vimeo, and direct video URLs while metadata remains persisted on the `Lesson` record.
+
+## Default Course Library
+
+Starter courses are defined in `src/lib/course-templates.ts` and can be enabled during organization onboarding or from `/dashboard/courses/library`. Enabling a template creates a normal organization-owned `Course` copy with sections, lessons, an assessment, certificate defaults, template source metadata, and optional auto-enrollment settings. Template updates do not overwrite customized organization copies.
+
+## Developer Platform
+
+The versioned public API lives under `/api/v1`. API keys are organization-scoped, shown once on creation, hashed at rest, and checked for scopes in `src/lib/developer/api-keys.ts`. Route handlers return a stable JSON error envelope and request ID headers through `src/lib/developer/api-response.ts`. Webhook endpoint records and signed payload helpers live in `src/lib/developer/webhooks.ts`.
+
+## Automations
+
+Learning events are recorded through `src/lib/automations/events.ts`. Matching enabled `AutomationRule` records create `AutomationRun` rows, with `NotificationDelivery` rows tracking channel delivery state. Trigger.dev configuration is surfaced in `/dashboard/automations`, but Trigger.dev does not own product state.
+
+## Enterprise, Commerce, And Social Learning
+
+Enterprise foundations include `AuditLog`, `CustomOrganizationRole`, and `OrganizationPrivacySettings`. Commerce foundations include `CourseBundle`, `CourseBundleItem`, and `CommerceCoupon`. Social learning foundations include `Cohort`, `CohortMembership`, `DiscussionThread`, `DiscussionPost`, and `LiveSession`.
 
 ## Assessments
 
