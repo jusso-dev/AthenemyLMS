@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  CourseTemplateAlreadyEnabledError,
   autoEnrollFutureMember,
   defaultCourseTemplates,
   instantiateDefaultCourseTemplate,
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     course: {
       count: vi.fn(),
       create: vi.fn(),
+      findFirst: vi.fn(),
       findMany: vi.fn(),
     },
     organizationMembership: { findMany: vi.fn() },
@@ -24,6 +26,7 @@ describe("default course templates", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.prisma.course.count.mockResolvedValue(0);
+    mocks.prisma.course.findFirst.mockResolvedValue(null);
     mocks.prisma.courseTemplate.upsert.mockResolvedValue({});
     mocks.prisma.course.create.mockResolvedValue({ id: "course_1" });
     mocks.prisma.organizationMembership.findMany.mockResolvedValue([
@@ -65,6 +68,40 @@ describe("default course templates", () => {
       data: [{ userId: "user_1", courseId: "course_1", status: "ACTIVE" }],
       skipDuplicates: true,
     });
+  });
+
+  it("refuses to re-enable an active template instance for the same organisation", async () => {
+    mocks.prisma.course.findFirst.mockResolvedValueOnce({ id: "course_existing" });
+
+    await expect(
+      instantiateDefaultCourseTemplate({
+        organizationId: "org_1",
+        instructorId: "user_1",
+        templateId: "cyber-security-awareness",
+      }),
+    ).rejects.toBeInstanceOf(CourseTemplateAlreadyEnabledError);
+
+    expect(mocks.prisma.course.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org_1",
+        sourceTemplateId: "cyber-security-awareness",
+        status: { not: "ARCHIVED" },
+      },
+      select: { id: true },
+    });
+    expect(mocks.prisma.course.create).not.toHaveBeenCalled();
+  });
+
+  it("allows re-enabling once the previous instance is archived", async () => {
+    mocks.prisma.course.findFirst.mockResolvedValueOnce(null);
+
+    await instantiateDefaultCourseTemplate({
+      organizationId: "org_1",
+      instructorId: "user_1",
+      templateId: "phishing-awareness",
+    });
+
+    expect(mocks.prisma.course.create).toHaveBeenCalled();
   });
 
   it("auto-enrolls future members only into active enabled courses", async () => {

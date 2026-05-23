@@ -35,6 +35,23 @@ test("dashboard route renders local setup state without Clerk", async ({
   await expectNoRuntimeFailure(page);
 });
 
+test("default course library renders template cards", async ({ page }) => {
+  await page.goto("/dashboard/courses/library");
+  await expect(
+    page.getByRole("heading", { name: "Default course library" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Cyber Security Awareness" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Phishing Awareness" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("searchbox", { name: "Search templates" }),
+  ).toBeVisible();
+  await expectNoRuntimeFailure(page);
+});
+
 test("portal builder route renders local setup state", async ({ page }) => {
   await page.goto("/dashboard/site");
   await expect(page.getByRole("heading", { name: "Portal" })).toBeVisible();

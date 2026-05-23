@@ -422,11 +422,32 @@ export function defaultStarterTemplateIds() {
   );
 }
 
+export class CourseTemplateAlreadyEnabledError extends Error {
+  constructor(public courseId: string) {
+    super(
+      "This template is already enabled for the organisation. Edit the existing course instead.",
+    );
+    this.name = "CourseTemplateAlreadyEnabledError";
+  }
+}
+
 export async function instantiateDefaultCourseTemplate(
   input: InstantiateTemplateInput,
 ) {
   const template = getDefaultCourseTemplate(input.templateId);
   if (!template) throw new Error("Default course template not found.");
+
+  const existing = await prisma.course.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      sourceTemplateId: template.id,
+      status: { not: "ARCHIVED" },
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new CourseTemplateAlreadyEnabledError(existing.id);
+  }
 
   await upsertCourseTemplate(template);
 

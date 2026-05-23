@@ -22,9 +22,18 @@ const mocks = vi.hoisted(() => ({
     enrollment: { createMany: vi.fn() },
     $transaction: vi.fn(),
   },
+  templates: {
+    instantiateDefaultCourseTemplate: vi.fn(),
+    autoEnrollFutureMember: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
+vi.mock("@/lib/course-templates", () => ({
+  instantiateDefaultCourseTemplate:
+    mocks.templates.instantiateDefaultCourseTemplate,
+  autoEnrollFutureMember: mocks.templates.autoEnrollFutureMember,
+}));
 
 describe("organizations", () => {
   beforeEach(() => {
@@ -32,6 +41,10 @@ describe("organizations", () => {
     mocks.prisma.$transaction.mockResolvedValue([]);
     mocks.prisma.course.findMany.mockResolvedValue([]);
     mocks.prisma.enrollment.createMany.mockResolvedValue({ count: 0 });
+    mocks.templates.instantiateDefaultCourseTemplate.mockResolvedValue({
+      id: "course_starter",
+    });
+    mocks.templates.autoEnrollFutureMember.mockResolvedValue({ count: 0 });
   });
 
   it("creates stable invitation tokens", () => {
@@ -82,6 +95,35 @@ describe("organizations", () => {
     ]);
   });
 
+  it("instantiates starter templates passed in during onboarding", async () => {
+    mocks.prisma.$transaction.mockResolvedValue([
+      { user: true },
+      { id: "org_new" },
+    ]);
+
+    await createOrganizationForUser({
+      name: "Athenemy Studio",
+      userId: "user_1",
+      starterTemplateIds: ["cyber-security-awareness", "phishing-awareness"],
+    });
+
+    expect(
+      mocks.templates.instantiateDefaultCourseTemplate,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.templates.instantiateDefaultCourseTemplate,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org_new",
+        instructorId: "user_1",
+        templateId: "cyber-security-awareness",
+        required: true,
+        autoEnrollExisting: true,
+        autoEnrollFuture: true,
+      }),
+    );
+  });
+
   it("accepts pending invitations for matching users", async () => {
     const expiresAt = new Date(Date.now() + 1000 * 60);
     mocks.prisma.organizationInvitation.findUnique.mockResolvedValue({
@@ -109,5 +151,9 @@ describe("organizations", () => {
       { membership: true },
       { invitation: true },
     ]);
+    expect(mocks.templates.autoEnrollFutureMember).toHaveBeenCalledWith({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
   });
 });
