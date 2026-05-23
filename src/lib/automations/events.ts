@@ -47,7 +47,11 @@ export async function recordLearningEvent(input: {
   });
 
   if (event.organizationId) {
-    await evaluateAutomationRules(event.organizationId, event.id, event.type);
+    try {
+      await evaluateAutomationRules(event.organizationId, event.id, event.type);
+    } catch (error) {
+      console.error("[automations] rule evaluation failed", error);
+    }
   }
 
   return event;
@@ -61,17 +65,38 @@ export async function evaluateAutomationRules(
   const rules = await prisma.automationRule.findMany({
     where: { organizationId, enabled: true, eventType },
   });
-  if (rules.length === 0) return { count: 0 };
+  if (rules.length === 0) return { count: 0, runIds: [] as string[] };
 
-  return prisma.automationRun.createMany({
-    data: rules.map((rule) => ({
-      organizationId,
-      ruleId: rule.id,
-      learningEventId,
-      status: "PENDING" as const,
-      metadata: { actionType: rule.actionType },
-    })),
-  });
+  const runs = await prisma.$transaction(
+    rules.map((rule) =>
+      prisma.automationRun.create({
+        data: {
+          organizationId,
+          ruleId: rule.id,
+          learningEventId,
+          status: "PENDING",
+          metadata: { actionType: rule.actionType },
+        },
+        select: { id: true },
+      }),
+    ),
+  );
+
+  // Dynamic import to avoid an events <-> dispatcher cycle at module init.
+  const { dispatchAutomationRun } = await import(
+    "@/lib/automations/dispatcher"
+  );
+  await Promise.all(
+    runs.map(async (run) => {
+      try {
+        await dispatchAutomationRun(run.id);
+      } catch (error) {
+        console.error("[automations] dispatch failed", run.id, error);
+      }
+    }),
+  );
+
+  return { count: runs.length, runIds: runs.map((run) => run.id) };
 }
 
 export function triggerDevConfigured() {
