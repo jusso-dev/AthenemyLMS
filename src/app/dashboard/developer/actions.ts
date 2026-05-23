@@ -72,6 +72,35 @@ export async function createWebhookEndpointFormAction(
   }
 }
 
+export async function revokeApiKeyFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  try {
+    assertDatabase();
+    const user = await requireAppUser();
+    const apiKeyId = String(formData.get("apiKeyId") ?? "");
+    if (!apiKeyId) throw new Error("API key id is required.");
+    const apiKey = await prisma.apiKey.findUnique({
+      where: { id: apiKeyId },
+      select: { id: true, organizationId: true, revokedAt: true },
+    });
+    if (!apiKey) throw new Error("API key not found.");
+    await requireDeveloperAccess(user, apiKey.organizationId);
+    if (apiKey.revokedAt) {
+      return actionSuccess("API key was already revoked.");
+    }
+    await prisma.apiKey.update({
+      where: { id: apiKey.id },
+      data: { revokedAt: new Date() },
+    });
+    revalidatePath("/dashboard/developer");
+    return actionSuccess("API key revoked.");
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
 function assertDatabase() {
   if (missingEnv(["DATABASE_URL"]).length > 0) {
     throw new Error("Supabase is not configured. Add DATABASE_URL.");
