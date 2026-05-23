@@ -129,13 +129,21 @@ export default async function MyCoursesPage({
                     })}
                   </p>
                 </div>
-                <Badge
-                  variant={
-                    item.progressPercent === 100 ? "success" : "secondary"
-                  }
-                >
-                  {item.progressPercent === 100 ? "Complete" : "Active"}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  {item.course.requiredForMembers ? (
+                    <Badge>Required</Badge>
+                  ) : null}
+                  {item.course.sourceTemplateId ? (
+                    <Badge variant="outline">From template</Badge>
+                  ) : null}
+                  <Badge
+                    variant={
+                      item.progressPercent === 100 ? "success" : "secondary"
+                    }
+                  >
+                    {item.progressPercent === 100 ? "Complete" : "Active"}
+                  </Badge>
+                </div>
               </div>
               <div>
                 <Progress value={item.progressPercent} />

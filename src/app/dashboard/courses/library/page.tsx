@@ -47,8 +47,9 @@ export default async function CourseTemplateLibraryPage({
               in: memberships.map((item) => item.organizationId),
             },
             sourceTemplateId: { not: null },
+            status: { not: "ARCHIVED" },
           },
-          select: { sourceTemplateId: true, organizationId: true },
+          select: { id: true, sourceTemplateId: true, organizationId: true },
         })
       : [];
   const categories = [
@@ -106,11 +107,13 @@ export default async function CourseTemplateLibraryPage({
       </form>
       <div className="grid gap-4 lg:grid-cols-2">
         {templates.map((template) => {
-          const enabledForOrg = enabled.some(
+          const enabledCourse = enabled.find(
             (course) =>
               course.sourceTemplateId === template.id &&
               course.organizationId === primaryOrg?.id,
           );
+          const enabledForOrg = Boolean(enabledCourse);
+          const formDisabled = !primaryOrg || !hasDatabase || enabledForOrg;
 
           return (
             <Card key={template.id}>
@@ -155,7 +158,7 @@ export default async function CourseTemplateLibraryPage({
                       type="checkbox"
                       name="required"
                       defaultChecked={template.requiredSuggestion}
-                      disabled={!primaryOrg || !hasDatabase}
+                      disabled={formDisabled}
                     />
                     Required for members
                   </label>
@@ -164,7 +167,7 @@ export default async function CourseTemplateLibraryPage({
                       type="checkbox"
                       name="autoEnrollExisting"
                       defaultChecked
-                      disabled={!primaryOrg || !hasDatabase}
+                      disabled={formDisabled}
                     />
                     Auto-enroll current members
                   </label>
@@ -173,16 +176,27 @@ export default async function CourseTemplateLibraryPage({
                       type="checkbox"
                       name="autoEnrollFuture"
                       defaultChecked
-                      disabled={!primaryOrg || !hasDatabase}
+                      disabled={formDisabled}
                     />
                     Auto-enroll future members
                   </label>
-                  <PendingSubmitButton
-                    className="w-fit"
-                    disabled={!primaryOrg || !hasDatabase}
-                  >
-                    Enable editable copy
-                  </PendingSubmitButton>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <PendingSubmitButton
+                      className="w-fit"
+                      disabled={formDisabled}
+                    >
+                      {enabledForOrg ? "Already enabled" : "Enable editable copy"}
+                    </PendingSubmitButton>
+                    {enabledCourse ? (
+                      <Button asChild variant="outline" size="sm">
+                        <Link
+                          href={`/dashboard/courses/${enabledCourse.id}/edit`}
+                        >
+                          Customise course
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
                 </ActionForm>
               </CardContent>
             </Card>
