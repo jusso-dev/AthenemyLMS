@@ -1,4 +1,5 @@
-import { Code2, KeyRound, Webhook } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Code2, KeyRound, Webhook } from "lucide-react";
 import {
   ActionForm,
   PendingSubmitButton,
@@ -6,9 +7,11 @@ import {
 import {
   createApiKeyFormAction,
   createWebhookEndpointFormAction,
+  revokeApiKeyFormAction,
 } from "@/app/dashboard/developer/actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getCurrentAppUser } from "@/lib/auth";
@@ -53,6 +56,21 @@ export default async function DeveloperPage() {
       <PageHeader
         title="Developer platform"
         description="API keys, scoped REST endpoints, signed webhooks, and integration documentation."
+        actions={
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link href="/dashboard/developer/docs">
+                <BookOpen className="h-4 w-4" />
+                Docs
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/api/v1/openapi.json" target="_blank">
+                openapi.json
+              </Link>
+            </Button>
+          </div>
+        }
       />
       <div className="grid gap-4 md:grid-cols-3">
         {[
@@ -123,17 +141,37 @@ export default async function DeveloperPage() {
                 {primary.apiKeys.map((key) => (
                   <div
                     key={key.id}
-                    className="flex items-center justify-between rounded-md border p-3"
+                    className="flex items-center justify-between gap-3 rounded-md border p-3"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium">{key.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {key.keyPrefix}... · {key.scopes.join(", ")}
+                        {key.keyPrefix}... ·{" "}
+                        {key.scopes.length ? key.scopes.join(", ") : "no scopes"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {key.lastUsedAt
+                          ? `Last used ${key.lastUsedAt.toISOString().slice(0, 10)}`
+                          : "Never used"}
                       </p>
                     </div>
-                    <Badge variant={key.revokedAt ? "outline" : "success"}>
-                      {key.revokedAt ? "Revoked" : "Active"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={key.revokedAt ? "outline" : "success"}>
+                        {key.revokedAt ? "Revoked" : "Active"}
+                      </Badge>
+                      {!key.revokedAt ? (
+                        <ActionForm action={revokeApiKeyFormAction}>
+                          <input
+                            type="hidden"
+                            name="apiKeyId"
+                            value={key.id}
+                          />
+                          <PendingSubmitButton variant="outline" size="sm">
+                            Revoke
+                          </PendingSubmitButton>
+                        </ActionForm>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

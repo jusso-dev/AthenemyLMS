@@ -52,6 +52,29 @@ test("default course library renders template cards", async ({ page }) => {
   await expectNoRuntimeFailure(page);
 });
 
+test("developer docs page lists scopes and webhook events", async ({ page }) => {
+  await page.goto("/dashboard/developer/docs");
+  await expect(
+    page.getByRole("heading", { name: "API documentation" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Scopes" })).toBeVisible();
+  await expect(page.getByText("org:read", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("enrollment.created", { exact: true }),
+  ).toBeVisible();
+  await expectNoRuntimeFailure(page);
+});
+
+test("openapi.json describes the v1 surface", async ({ request }) => {
+  const response = await request.get("/api/v1/openapi.json");
+  expect(response.status()).toBe(200);
+  const spec = await response.json();
+  expect(spec.openapi).toBe("3.1.0");
+  expect(spec.paths).toHaveProperty("/me");
+  expect(spec.paths).toHaveProperty("/enrollments");
+  expect(spec.paths).toHaveProperty("/webhook-endpoints");
+});
+
 test("portal builder route renders local setup state", async ({ page }) => {
   await page.goto("/dashboard/site");
   await expect(page.getByRole("heading", { name: "Portal" })).toBeVisible();
