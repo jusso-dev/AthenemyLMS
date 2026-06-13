@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentAppUser } from "@/lib/auth";
+import { automationExecutionMode } from "@/lib/automations/dispatcher";
 import {
   builtInAutomationRecipes,
   triggerDevConfigured,
@@ -11,6 +12,14 @@ import { databaseIsConfigured, fallbackNotice } from "@/lib/dashboard-data";
 import { canManageOrganization } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { SetupMessage } from "@/lib/setup-message";
+
+const runStatusVariant: Record<string, "default" | "secondary" | "success" | "outline"> = {
+  PENDING: "outline",
+  RUNNING: "secondary",
+  SUCCEEDED: "success",
+  FAILED: "default",
+  SKIPPED: "outline",
+};
 
 export default async function AutomationsPage() {
   const hasDatabase = databaseIsConfigured();
@@ -37,6 +46,8 @@ export default async function AutomationsPage() {
     canManageOrganization(user, membership),
   )?.organization;
 
+  const executionMode = automationExecutionMode();
+
   return (
     <div className="space-y-8">
       {!hasDatabase ? <SetupMessage {...fallbackNotice()} /> : null}
@@ -44,6 +55,19 @@ export default async function AutomationsPage() {
         title="Automations"
         description="Lifecycle events, built-in recipes, notification delivery, and Trigger.dev readiness."
       />
+      {executionMode === "inline" ? (
+        <div className="rounded-md border bg-muted/30 p-4 text-sm">
+          <p className="font-medium">
+            Inline execution mode
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            Automation runs are dispatched synchronously inside the request that
+            produced the learning event. Set <code>TRIGGER_SECRET_KEY</code> or
+            <code> TRIGGER_API_KEY</code> to opt in to Trigger.dev once the SDK
+            wiring lands in Phase 2 of this feature.
+          </p>
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -103,6 +127,38 @@ export default async function AutomationsPage() {
           ))}
         </CardContent>
       </Card>
+      {primary ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent runs</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {primary.automationRuns.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No automation runs yet. They appear here once an enabled rule
+                matches a learning event.
+              </p>
+            ) : null}
+            {primary.automationRuns.map((run) => (
+              <div
+                key={run.id}
+                className="flex items-center justify-between rounded-md border p-3"
+              >
+                <div>
+                  <p className="font-medium">{run.id}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {run.createdAt.toISOString()}
+                    {run.error ? ` · ${run.error}` : ""}
+                  </p>
+                </div>
+                <Badge variant={runStatusVariant[run.status] ?? "outline"}>
+                  {run.status}
+                </Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Recent delivery state</CardTitle>

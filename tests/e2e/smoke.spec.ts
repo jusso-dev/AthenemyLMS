@@ -85,6 +85,21 @@ test("portal builder route renders local setup state", async ({ page }) => {
   await expectNoRuntimeFailure(page);
 });
 
+test("automations route surfaces execution mode and recipes", async ({
+  page,
+}) => {
+  await page.goto("/dashboard/automations");
+  await expect(
+    page.getByRole("heading", { name: "Automations" }),
+  ).toBeVisible();
+  await expect(page.getByText("Inline execution mode")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Recipes" }),
+  ).toBeVisible();
+  await expect(page.getByText("Enrollment welcome")).toBeVisible();
+  await expectNoRuntimeFailure(page);
+});
+
 test("theme toggle persists across reloads", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Use dark mode" }).click();
