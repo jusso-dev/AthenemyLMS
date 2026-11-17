@@ -10,6 +10,8 @@ import { missingEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { SetupMessage } from "@/lib/setup-message";
 
+export const dynamic = "force-dynamic";
+
 export default async function OrganizationOnboardingPage() {
   const hasDatabase = missingEnv(["DATABASE_URL"]).length === 0;
   const user = hasDatabase ? await getCurrentAppUser() : null;
@@ -24,7 +26,11 @@ export default async function OrganizationOnboardingPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="flex min-h-screen items-center justify-center bg-background px-4 py-12"
+    >
       <div className="w-full max-w-lg space-y-6">
         <div className="flex justify-center">
           <Logo />

@@ -65,7 +65,12 @@ npm run db:migrate
 
 ### Automations
 
-- `TRIGGER_SECRET_KEY` or `TRIGGER_API_KEY`: optional. When present, `/dashboard/automations` reports Trigger.dev as configured. Athenemy still stores learning events, rules, runs, notification deliveries, and webhook delivery state in Postgres.
+- Run `npm run worker` as a supervised process with the same database and email configuration as the application. Trigger.dev variables do not change execution mode.
+- `WEBHOOK_ENCRYPTION_KEY`: a base64-encoded 32-byte random secret shared by application and worker. Preserve it across deployments; losing it prevents existing webhook signing secrets from being decrypted.
+
+### SCORM packages
+
+- `SCORM_STORAGE_DIR`: absolute path to a persistent private volume in production, shared across app replicas and outside `public/`. Development defaults to `.private/scorm`. Back up this volume with the database.
 
 ## Secret Hygiene
 

@@ -29,7 +29,10 @@ export async function POST() {
 
     const user = await getCurrentAppUser();
     if (!user) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
     }
 
     const stripe = getStripe();
@@ -45,7 +48,7 @@ export async function POST() {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Billing portal failed" },
+      { error: "Billing portal failed. Please try again." },
       { status: 500 },
     );
   }

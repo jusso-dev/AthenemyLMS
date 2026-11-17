@@ -1,5 +1,12 @@
+import { recordCourseEvent } from "@/lib/learning-events";
 import { prisma } from "@/lib/prisma";
-import { getCompletionGateStatus } from "@/lib/assessments";
+import type { Prisma } from "@prisma/client";
+import {
+  getLearningCompletion,
+  hasLearningAccess,
+  learningTransaction,
+  reconcileLearningCompletion,
+} from "@/lib/learning";
 
 export function createCertificateNumber(
   date = new Date(),
@@ -11,32 +18,48 @@ export function createCertificateNumber(
 }
 
 export async function issueCertificate(userId: string, courseId: string) {
-  const eligibility = await getCertificateEligibility(userId, courseId);
-  if (!eligibility.eligible) {
-    throw new Error(eligibility.reason);
-  }
-
-  return prisma.certificate.upsert({
-    where: { userId_courseId: { userId, courseId } },
-    update: {},
-    create: {
+  return learningTransaction(async (database) => {
+    const eligibility = await getCertificateEligibility(
       userId,
       courseId,
-      certificateNumber: createCertificateNumber(),
-    },
+      database,
+    );
+    if (!eligibility.eligible) {
+      throw new Error(eligibility.reason);
+    }
+
+    await reconcileLearningCompletion(database, userId, courseId);
+    const certificate = await database.certificate.upsert({
+      where: { userId_courseId: { userId, courseId } },
+      update: {},
+      create: {
+        userId,
+        courseId,
+        certificateNumber: createCertificateNumber(),
+      },
+    });
+    await recordCourseEvent(database, {
+      userId,
+      courseId,
+      type: "certificate.issued",
+      idempotencyKey: `certificate-issued:${certificate.id}`,
+      payload: { certificateNumber: certificate.certificateNumber },
+    });
+    return certificate;
   });
 }
 
 export async function getCertificateEligibility(
   userId: string,
   courseId: string,
+  database: Prisma.TransactionClient = prisma,
 ) {
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await database.enrollment.findUnique({
     where: { userId_courseId: { userId, courseId } },
     include: { course: true },
   });
 
-  if (!enrollment || enrollment.status !== "COMPLETED") {
+  if (!enrollment || !hasLearningAccess(enrollment)) {
     return {
       eligible: false,
       reason: "Course must be completed before issuing a certificate.",
@@ -49,16 +72,34 @@ export async function getCertificateEligibility(
     };
   }
 
-  const gates = await getCompletionGateStatus(userId, courseId);
-  if (!gates.passed) {
+  const completion = await getLearningCompletion(userId, courseId, database);
+  if (
+    !completion.totalLessons ||
+    completion.completedLessons !== completion.totalLessons
+  ) {
+    return {
+      eligible: false,
+      reason:
+        "All course lessons must be completed before issuing a certificate.",
+    };
+  }
+  if (completion.missingAssessments.length > 0) {
     return {
       eligible: false,
       reason:
         "Required assessments must be passed before issuing a certificate.",
-      missingAssessments: gates.missing,
+      missingAssessments: completion.missingAssessments,
     };
   }
 
+  if (completion.missingScorm.length > 0) {
+    return {
+      eligible: false,
+      reason:
+        "Required SCORM packages must be completed before issuing a certificate.",
+      missingScorm: completion.missingScorm,
+    };
+  }
   return { eligible: true, reason: "Certificate is available." };
 }
 

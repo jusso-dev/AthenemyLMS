@@ -1,19 +1,24 @@
+import {
+  ActionForm,
+  PendingSubmitButton,
+} from "@/components/forms/action-form";
+import { saveAutomationRecipeAction } from "./actions";
 import { Bell, History, Workflow } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentAppUser } from "@/lib/auth";
 import { automationExecutionMode } from "@/lib/automations/dispatcher";
-import {
-  builtInAutomationRecipes,
-  triggerDevConfigured,
-} from "@/lib/automations/events";
+import { builtInAutomationRecipes } from "@/lib/automations/events";
 import { databaseIsConfigured, fallbackNotice } from "@/lib/dashboard-data";
 import { canManageOrganization } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { SetupMessage } from "@/lib/setup-message";
 
-const runStatusVariant: Record<string, "default" | "secondary" | "success" | "outline"> = {
+const runStatusVariant: Record<
+  string,
+  "default" | "secondary" | "success" | "outline"
+> = {
   PENDING: "outline",
   RUNNING: "secondary",
   SUCCEEDED: "success",
@@ -31,7 +36,7 @@ export default async function AutomationsPage() {
           include: {
             organization: {
               include: {
-                automationRules: { orderBy: { updatedAt: "desc" }, take: 10 },
+                automationRules: { orderBy: { updatedAt: "desc" } },
                 automationRuns: { orderBy: { createdAt: "desc" }, take: 10 },
                 notificationDeliveries: {
                   orderBy: { createdAt: "desc" },
@@ -53,33 +58,25 @@ export default async function AutomationsPage() {
       {!hasDatabase ? <SetupMessage {...fallbackNotice()} /> : null}
       <PageHeader
         title="Automations"
-        description="Lifecycle events, built-in recipes, notification delivery, and Trigger.dev readiness."
+        description="Lifecycle recipes, background delivery, and notification history."
       />
-      {executionMode === "inline" ? (
-        <div className="rounded-md border bg-muted/30 p-4 text-sm">
-          <p className="font-medium">
-            Inline execution mode
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            Automation runs are dispatched synchronously inside the request that
-            produced the learning event. Set <code>TRIGGER_SECRET_KEY</code> or
-            <code> TRIGGER_API_KEY</code> to opt in to Trigger.dev once the SDK
-            wiring lands in Phase 2 of this feature.
-          </p>
-        </div>
-      ) : null}
+      <div className="rounded-md border bg-muted/30 p-4 text-sm">
+        <p className="font-medium">Background delivery</p>
+        <p className="mt-1 text-muted-foreground">
+          Enabled recipes are queued durably and delivered by your background
+          worker. Failed deliveries retry automatically up to five times.
+        </p>
+      </div>
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <Workflow className="h-5 w-5 text-primary" />
             <CardTitle className="text-sm text-muted-foreground">
-              Trigger.dev
+              Execution
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge variant={triggerDevConfigured() ? "success" : "outline"}>
-              {triggerDevConfigured() ? "Configured" : "Not configured"}
-            </Badge>
+            <Badge variant="outline">{executionMode}</Badge>
           </CardContent>
         </Card>
         <Card>
@@ -123,6 +120,39 @@ export default async function AutomationsPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 {recipe.actionType}
               </p>
+              {primary ? (
+                <ActionForm
+                  action={saveAutomationRecipeAction}
+                  className="mt-3"
+                >
+                  <input
+                    type="hidden"
+                    name="organizationId"
+                    value={primary.id}
+                  />
+                  <input
+                    type="hidden"
+                    name="actionType"
+                    value={recipe.actionType}
+                  />
+                  <input
+                    type="hidden"
+                    name="enabled"
+                    value={String(
+                      !primary.automationRules.find(
+                        (rule) => rule.actionType === recipe.actionType,
+                      )?.enabled,
+                    )}
+                  />
+                  <PendingSubmitButton variant="outline" size="sm">
+                    {primary.automationRules.find(
+                      (rule) => rule.actionType === recipe.actionType,
+                    )?.enabled
+                      ? "Pause recipe"
+                      : "Enable recipe"}
+                  </PendingSubmitButton>
+                </ActionForm>
+              ) : null}
             </div>
           ))}
         </CardContent>
@@ -147,7 +177,7 @@ export default async function AutomationsPage() {
                 <div>
                   <p className="font-medium">{run.id}</p>
                   <p className="text-sm text-muted-foreground">
-                    {run.createdAt.toISOString()}
+                    {run.createdAt.toISOString()} · {run.attempts} attempts
                     {run.error ? ` · ${run.error}` : ""}
                   </p>
                 </div>

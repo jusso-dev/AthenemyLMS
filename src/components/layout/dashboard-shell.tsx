@@ -42,7 +42,11 @@ export function DashboardShell({
           </div>
         </header>
         <DashboardMobileNav />
-        <main className={cn("mx-auto max-w-7xl px-4 py-8 sm:px-6", className)}>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className={cn("mx-auto max-w-7xl px-4 py-8 sm:px-6", className)}
+        >
           {children}
         </main>
       </div>

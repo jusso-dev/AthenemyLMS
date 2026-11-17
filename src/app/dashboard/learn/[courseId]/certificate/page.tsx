@@ -10,6 +10,7 @@ import { missingEnv } from "@/lib/env";
 import { getCurrentAppUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { issueCertificateFormAction } from "@/app/dashboard/courses/actions";
+import { getCertificateEligibility } from "@/lib/certificates";
 
 export default async function CourseCertificatePage({
   params,
@@ -19,12 +20,9 @@ export default async function CourseCertificatePage({
   const { courseId } = await params;
   const databaseMissing = missingEnv(["DATABASE_URL"]).length > 0;
   const user = await getCurrentAppUser();
-  const enrollment =
+  const eligibility =
     !databaseMissing && user
-      ? await prisma.enrollment.findUnique({
-          where: { userId_courseId: { userId: user.id, courseId } },
-          include: { course: true },
-        })
+      ? await getCertificateEligibility(user.id, courseId)
       : null;
   const existing =
     !databaseMissing && user
@@ -61,12 +59,7 @@ export default async function CourseCertificatePage({
               action={issueCertificateFormAction.bind(null, courseId)}
             >
               <PendingSubmitButton
-                disabled={
-                  databaseMissing ||
-                  !user ||
-                  enrollment?.status !== "COMPLETED" ||
-                  enrollment.course.certificatesEnabled === false
-                }
+                disabled={databaseMissing || !user || !eligibility?.eligible}
                 pendingLabel="Issuing..."
               >
                 Issue certificate
@@ -74,8 +67,8 @@ export default async function CourseCertificatePage({
             </ActionForm>
           ) : null}
           <p className="text-sm text-muted-foreground">
-            Certificates are available after course completion when the
-            instructor has enabled certificate issuing.
+            {eligibility?.reason ??
+              "Certificates are available after all lessons and required assessments are complete, when enabled by the instructor."}
           </p>
         </CardContent>
       </Card>

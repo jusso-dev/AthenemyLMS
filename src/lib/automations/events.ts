@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
@@ -17,15 +18,25 @@ export const automationEventTypes = [
 
 export type AutomationEventType = (typeof automationEventTypes)[number];
 
-export async function recordLearningEvent(input: {
+export type LearningEventInput = {
   organizationId?: string | null;
   userId?: string | null;
   courseId?: string | null;
   type: AutomationEventType | string;
   payload?: Record<string, unknown>;
   idempotencyKey?: string | null;
-}) {
-  const event = await prisma.learningEvent.upsert({
+};
+
+/** Pass the business mutation's transaction to commit its event atomically. */
+export async function recordLearningEvent(
+  input: LearningEventInput,
+  db: Prisma.TransactionClient = prisma,
+) {
+  const standaloneId =
+    !input.organizationId && input.idempotencyKey
+      ? `evt_${createHash("sha256").update(input.idempotencyKey).digest("hex")}`
+      : crypto.randomUUID();
+  return db.learningEvent.upsert({
     where:
       input.organizationId && input.idempotencyKey
         ? {
@@ -34,9 +45,10 @@ export async function recordLearningEvent(input: {
               idempotencyKey: input.idempotencyKey,
             },
           }
-        : { id: crypto.randomUUID() },
+        : { id: standaloneId },
     update: {},
     create: {
+      id: standaloneId,
       organizationId: input.organizationId ?? null,
       userId: input.userId ?? null,
       courseId: input.courseId ?? null,
@@ -45,57 +57,36 @@ export async function recordLearningEvent(input: {
       idempotencyKey: input.idempotencyKey ?? null,
     },
   });
-
-  if (event.organizationId) {
-    try {
-      await evaluateAutomationRules(event.organizationId, event.id, event.type);
-    } catch (error) {
-      console.error("[automations] rule evaluation failed", error);
-    }
-  }
-
-  return event;
 }
 
 export async function evaluateAutomationRules(
   organizationId: string,
   learningEventId: string,
   eventType: string,
+  db: Prisma.TransactionClient = prisma,
+  ruleId?: string,
 ) {
-  const rules = await prisma.automationRule.findMany({
-    where: { organizationId, enabled: true, eventType },
+  const rules = await db.automationRule.findMany({
+    where: {
+      organizationId,
+      enabled: true,
+      eventType,
+      ...(ruleId ? { id: ruleId } : {}),
+    },
   });
-  if (rules.length === 0) return { count: 0, runIds: [] as string[] };
-
-  const runs = await prisma.$transaction(
-    rules.map((rule) =>
-      prisma.automationRun.create({
-        data: {
-          organizationId,
-          ruleId: rule.id,
-          learningEventId,
-          status: "PENDING",
-          metadata: { actionType: rule.actionType },
-        },
-        select: { id: true },
-      }),
-    ),
-  );
-
-  // Dynamic import to avoid an events <-> dispatcher cycle at module init.
-  const { dispatchAutomationRun } = await import(
-    "@/lib/automations/dispatcher"
-  );
-  await Promise.all(
-    runs.map(async (run) => {
-      try {
-        await dispatchAutomationRun(run.id);
-      } catch (error) {
-        console.error("[automations] dispatch failed", run.id, error);
-      }
-    }),
-  );
-
+  await db.automationRun.createMany({
+    data: rules.map((rule) => ({
+      organizationId,
+      ruleId: rule.id,
+      learningEventId,
+      metadata: { actionType: rule.actionType },
+    })),
+    skipDuplicates: true,
+  });
+  const runs = await db.automationRun.findMany({
+    where: { organizationId, learningEventId },
+    select: { id: true },
+  });
   return { count: runs.length, runIds: runs.map((run) => run.id) };
 }
 

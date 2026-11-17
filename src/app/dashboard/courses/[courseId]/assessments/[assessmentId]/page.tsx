@@ -141,13 +141,13 @@ export default async function AssessmentManagementPage({
                     placeholder="Attempt limit"
                   />
                   <Input
-                    aria-label="Time limit"
+                    aria-label="Time limit in minutes"
                     name="timeLimitMinutes"
                     type="number"
                     min="1"
                     max="600"
                     defaultValue={assessment.timeLimitMinutes ?? ""}
-                    placeholder="Minutes"
+                    placeholder="Time limit in minutes"
                   />
                   <label className="grid gap-2 text-sm font-medium">
                     Feedback
@@ -163,6 +163,19 @@ export default async function AssessmentManagementPage({
                     </select>
                   </label>
                 </div>
+                <label className="grid gap-2 text-sm font-medium">
+                  Closing time (optional, ISO date with timezone)
+                  <Input
+                    name="closesAt"
+                    defaultValue={assessment.closesAt?.toISOString() ?? ""}
+                    placeholder="2026-12-01T17:00:00+11:00"
+                  />
+                </label>
+                <p className="text-sm text-muted-foreground">
+                  After-close feedback requires a closing time. Timers continue
+                  when learners leave. Time-limit changes apply to new attempts;
+                  closing an assessment ends all attempts.
+                </p>
                 <PendingSubmitButton className="w-fit">
                   Save assessment
                 </PendingSubmitButton>

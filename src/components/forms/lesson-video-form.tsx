@@ -48,6 +48,7 @@ export function LessonVideoForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           fileName: file.name,
+          fileSize: file.size,
           contentType: file.type || "video/mp4",
           folder: "videos",
         }),

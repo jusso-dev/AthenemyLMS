@@ -26,7 +26,7 @@ export default async function CourseDetailPage({
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="border-b bg-card">
           <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
             <div>
@@ -38,7 +38,9 @@ export default async function CourseDetailPage({
                 {course.description}
               </p>
               <div className="mt-6 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <span>Instructor: {course.instructor?.name ?? "Athenemy faculty"}</span>
+                <span>
+                  Instructor: {course.instructor?.name ?? "Athenemy faculty"}
+                </span>
                 <span className="inline-flex items-center gap-1">
                   <Clock className="h-4 w-4" />
                   {Math.round(course.durationMinutes / 60)} hours

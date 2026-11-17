@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   sendCoursePublishedEmail,
+  sendCourseCompletionEmail,
+  sendCertificateIssuedEmail,
+  sendInactivityNudgeEmail,
   sendEnrollmentEmail,
   sendWelcomeEmail,
 } from "@/lib/email";
@@ -32,9 +35,11 @@ describe("transactional email", () => {
     vi.stubEnv("EMAIL_PROVIDER", "resend");
     vi.stubEnv("EMAIL_FROM", "Athenemy <hello@example.com>");
     vi.stubEnv("RESEND_API_KEY", "re_test_key");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "email_123" }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: "email_123" }), { status: 200 }),
+      );
 
     await expect(
       sendEnrollmentEmail({
@@ -57,6 +62,38 @@ describe("transactional email", () => {
       }),
     );
   });
+
+  it.each([
+    ["course_completion", sendCourseCompletionEmail],
+    ["certificate_issued", sendCertificateIssuedEmail],
+    ["inactivity_nudge", sendInactivityNudgeEmail],
+  ] as const)(
+    "sends the %s template with escaped HTML and stable idempotency",
+    async (event, send) => {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("EMAIL_PROVIDER", "resend");
+      vi.stubEnv("RESEND_API_KEY", "re_fixture");
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(
+          new Response(JSON.stringify({ id: "fixture" }), { status: 200 }),
+        );
+      await send({
+        to: "learner@example.test",
+        courseTitle: "Design <Basics>",
+        idempotencyKey: "automation:fixture",
+      });
+      const options = fetchMock.mock.calls[0][1]!;
+      expect(options.headers).toMatchObject({
+        "Idempotency-Key": "automation:fixture",
+      });
+      const payload = JSON.parse(String(options.body));
+      expect(payload.tags).toEqual([{ name: "event", value: event }]);
+      expect(payload.html).toContain("Design &lt;Basics&gt;");
+      expect(payload.text).toContain("Design <Basics>");
+      expect(options.signal).toBeDefined();
+    },
+  );
 
   it("raises actionable production setup errors", async () => {
     vi.stubEnv("NODE_ENV", "production");

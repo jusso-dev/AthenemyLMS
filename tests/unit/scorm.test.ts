@@ -47,4 +47,32 @@ describe("SCORM manifest parsing", () => {
       parseScorm12Manifest(await zip.generateAsync({ type: "arraybuffer" })),
     ).rejects.toThrow("SCORM package is missing imsmanifest.xml.");
   });
+
+  it("uses the default organization's nested launch item, not the first resource", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "imsmanifest.xml",
+      `<manifest identifier="package">
+      <organizations default="selected">
+        <organization identifier="other"><title>Other</title><item identifierref="other-resource" /></organization>
+        <organization identifier="selected"><title>Selected</title><item><title>Section</title><item identifierref="launch" /></item></organization>
+      </organizations>
+      <resources><resource identifier="asset" href="styles.css" /><resource identifier="other-resource" href="other.html" /><resource identifier="launch" href="lesson.html" /></resources>
+    </manifest>`,
+    );
+    await expect(
+      parseScorm12Manifest(await zip.generateAsync({ type: "arraybuffer" })),
+    ).resolves.toMatchObject({ title: "Selected", launchPath: "lesson.html" });
+  });
+
+  it("rejects a package without a launchable organization item", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "imsmanifest.xml",
+      `<manifest><organizations><organization><title>Broken</title><item identifierref="missing" /></organization></organizations><resources><resource identifier="asset" href="styles.css" /></resources></manifest>`,
+    );
+    await expect(
+      parseScorm12Manifest(await zip.generateAsync({ type: "arraybuffer" })),
+    ).rejects.toThrow("launch file");
+  });
 });

@@ -24,16 +24,21 @@ export function getR2Client() {
 export async function createPresignedUpload(input: {
   key: string;
   contentType: string;
+  sizeBytes: number;
 }) {
   const client = getR2Client();
   const command = new PutObjectCommand({
     Bucket: env.CLOUDFLARE_R2_BUCKET_NAME,
     Key: input.key,
     ContentType: input.contentType,
+    ContentLength: input.sizeBytes,
   });
 
-  const uploadUrl = await getSignedUrl(client, command, { expiresIn: 900 });
-  const publicUrl = `${env.CLOUDFLARE_R2_PUBLIC_BASE_URL}/${input.key}`;
+  const uploadUrl = await getSignedUrl(client, command, {
+    expiresIn: 900,
+    signableHeaders: new Set(["content-type", "content-length"]),
+  });
+  const publicUrl = `${env.CLOUDFLARE_R2_PUBLIC_BASE_URL?.replace(/\/$/, "")}/${input.key}`;
 
   return { uploadUrl, publicUrl, key: input.key };
 }

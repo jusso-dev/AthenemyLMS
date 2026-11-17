@@ -20,7 +20,11 @@ export default async function CertificateVerificationPage({
   if (!databaseMissing && !certificate) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-16">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="mx-auto max-w-3xl px-4 py-16"
+    >
       {databaseMissing ? (
         <SetupMessage
           title="Supabase setup required"
@@ -40,7 +44,8 @@ export default async function CertificateVerificationPage({
             {certificate?.course.title ?? "Athenemy course"}
           </p>
           <p className="text-sm text-muted-foreground">
-            Issued by {certificate?.course.instructor.name ?? "Athenemy faculty"} on{" "}
+            Issued by{" "}
+            {certificate?.course.instructor.name ?? "Athenemy faculty"} on{" "}
             {certificate?.issuedAt.toLocaleDateString("en", {
               year: "numeric",
               month: "long",

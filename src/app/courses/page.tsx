@@ -4,20 +4,26 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { getPublishedCourses } from "@/lib/course-data";
+import { CataloguePagination } from "@/components/catalogue-pagination";
+import { getPublishedCourseCatalogue } from "@/lib/course-data";
 
 export default async function CoursesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const params = await searchParams;
-  const courses = await getPublishedCourses(params.q);
+  const catalogue = await getPublishedCourseCatalogue(params.q, params.page);
+  const { courses } = catalogue;
 
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8"
+      >
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-4xl font-semibold tracking-tight">
@@ -33,6 +39,7 @@ export default async function CoursesPage({
               aria-label="Search courses"
               type="search"
               name="q"
+              defaultValue={params.q}
               placeholder="Search courses"
               className="pl-9"
             />
@@ -43,6 +50,11 @@ export default async function CoursesPage({
             <CourseCard key={course.slug} course={course} />
           ))}
         </div>
+        <CataloguePagination
+          {...catalogue}
+          basePath="/courses"
+          query={params.q}
+        />
         {courses.length === 0 ? (
           <EmptyState
             icon={LibraryBig}

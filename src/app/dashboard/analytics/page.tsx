@@ -10,13 +10,21 @@ import { getCurrentAppUser } from "@/lib/auth";
 import {
   analyticsFallbackNotice,
   getInstructorAnalytics,
+  formatRevenueTotals,
 } from "@/lib/analytics";
-import { formatPrice } from "@/lib/utils";
+import { CataloguePagination } from "@/components/catalogue-pagination";
 import { SetupMessage } from "@/lib/setup-message";
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const user = await getCurrentAppUser();
-  const analytics = await getInstructorAnalytics(user);
+  const analytics = await getInstructorAnalytics(
+    user,
+    (await searchParams).page,
+  );
 
   return (
     <div className="space-y-6">
@@ -44,6 +52,10 @@ export default async function AnalyticsPage() {
                 <CardContent className="p-5">
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
                   <p className="mt-2 text-3xl font-semibold">{stat.value}</p>
+                  <CataloguePagination
+                    {...analytics}
+                    basePath="/dashboard/analytics"
+                  />
                 </CardContent>
               </Card>
             ))}
@@ -56,9 +68,7 @@ export default async function AnalyticsPage() {
                   Completion, engagement, and revenue by course.
                 </p>
               </div>
-              <Badge variant="outline">
-                {analytics.courses.length} courses
-              </Badge>
+              <Badge variant="outline">{analytics.total} courses</Badge>
             </CardHeader>
             <CardContent className="space-y-3">
               {analytics.courses.length === 0 ? (
@@ -98,7 +108,11 @@ export default async function AnalyticsPage() {
                     </p>
                   </div>
                   <div className="text-sm font-medium">
-                    {formatPrice(course.revenueCents)}
+                    {formatRevenueTotals(
+                      course.revenueByCurrency ?? [
+                        { currency: "usd", revenueCents: course.revenueCents },
+                      ],
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2 lg:justify-end">
                     <Button asChild size="sm" variant="outline">
@@ -118,6 +132,10 @@ export default async function AnalyticsPage() {
                   </div>
                 </div>
               ))}
+              <CataloguePagination
+                {...analytics}
+                basePath="/dashboard/analytics"
+              />
             </CardContent>
           </Card>
         </>

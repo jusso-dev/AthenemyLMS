@@ -20,11 +20,12 @@ Lesson bodies are authored as Markdown through `src/components/forms/rich-lesson
 - Stripe Checkout creates paid enrollments after verified webhook events.
 - Cloudflare R2 stores thumbnails, resources, and optional lesson files through signed upload URLs.
 - Transactional email is routed through `src/lib/email/index.ts`, using safe stub delivery in local/test mode and Resend when configured.
-- Trigger.dev is an optional orchestration layer for automation jobs. Athenemy keeps events, rules, runs, delivery attempts, and webhook state in Postgres so self-hosters can inspect and replace the execution backend later.
+- A separately supervised PostgreSQL worker delivers automation emails and signed webhooks with durable claims, retries and attempt history. Trigger.dev credentials do not change execution mode.
+- SCORM 1.2 packages use private persistent storage and opaque-origin sandboxed delivery; see INTEROPERABILITY.md for the supported single-SCO subset.
 
 ## Analytics
 
-Instructor and admin dashboards read analytics through `src/lib/analytics.ts`. The query layer prefers persisted `AnalyticsRollup` rows for per-course and platform summaries, then derives the same metrics from enrollments, payments, lessons, and lesson progress when rollups have not been generated yet. Indexes on enrollment status, payment status/date, course ownership/status, and lesson completion support realistic dashboard query sizes.
+Instructor and admin dashboards read analytics through `src/lib/analytics.ts`. The query layer aggregates current enrollments, net payments and lesson progress in PostgreSQL. Paginated course details do not truncate the summary totals, and revenue is kept separate by currency. Indexes on enrollment status, payment status/date, course ownership/status, and lesson completion support realistic dashboard query sizes.
 
 ## Video
 
@@ -40,7 +41,7 @@ The versioned public API lives under `/api/v1`. API keys are organization-scoped
 
 ## Automations
 
-Learning events are recorded through `src/lib/automations/events.ts`. Matching enabled `AutomationRule` records create `AutomationRun` rows, with `NotificationDelivery` rows tracking channel delivery state. Trigger.dev configuration is surfaced in `/dashboard/automations`, but Trigger.dev does not own product state.
+Learning mutations record outbox events in the same transaction through `src/lib/automations/events.ts`. The worker claims and fans out committed events into unique `AutomationRun` and `WebhookDelivery` rows. Leases, bounded retries and stable delivery keys support crash recovery. Notifications distinguish real delivery from skipped stubs. Inactivity scans create deduplicated reminders. See AUTOMATIONS.md for operation and delivery guarantees.
 
 ## Enterprise, Commerce, And Social Learning
 
@@ -48,7 +49,7 @@ Enterprise foundations include `AuditLog`, `CustomOrganizationRole`, and `Organi
 
 ## Assessments
 
-Courses can include quiz assessments with persisted questions and submissions. Required assessments act as completion gates through `getCompletionGateStatus`, which checks whether a learner has passed every required assessment before course completion flows mark final completion.
+Courses include quiz assessments with persisted questions, reserved attempts, server deadlines and submissions. A refresh resumes the original deadline; expiry consumes an attempt. Scheduled feedback controls score visibility. Shared completion logic checks completed lessons, required assessment passes and attached SCORM package completion before marking an enrollment complete or issuing a certificate.
 
 ## Local Fallbacks
 
@@ -66,4 +67,4 @@ Tenant data is stored in Prisma using organisations, memberships, and invitation
 
 Completed enrollments can issue one certificate per learner/course when `Course.certificatesEnabled` is true. Public certificate verification uses the certificate number and exposes only course, issuer, and issue date metadata, not private learner profile data.
 
-Dashboard management pages read through `src/lib/dashboard-data.ts`. That layer uses Prisma when `DATABASE_URL` is configured and returns empty setup states when persisted data is unavailable. Mutating dashboard operations live in `src/app/dashboard/courses/actions.ts`; they require a signed-in Clerk-backed user, validate form payloads with Zod, and check instructor/admin ownership before writing to Prisma.
+Dashboard management pages read through `src/lib/dashboard-data.ts`. That layer uses Prisma when `DATABASE_URL` is configured and returns empty setup states only when the database is unconfigured. Configured database failures propagate to retryable error boundaries. Mutating dashboard operations live in `src/app/dashboard/courses/actions.ts`; they require a signed-in Clerk-backed user, validate form payloads with Zod, and check instructor/admin ownership before writing to Prisma.

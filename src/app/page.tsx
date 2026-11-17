@@ -49,7 +49,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="subtle-grid border-b">
           <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:px-8 lg:py-24">
             <div className="flex flex-col justify-center">

@@ -1,8 +1,10 @@
+import { CataloguePagination } from "@/components/catalogue-pagination";
+import { Input } from "@/components/ui/input";
 import { notFound } from "next/navigation";
 import { LibraryBig } from "lucide-react";
 import { getCurrentAppUser } from "@/lib/auth";
 import {
-  getPortalCourses,
+  getPortalCourseCatalogue,
   getPublishedPortal,
   publishedTheme,
 } from "@/lib/portal";
@@ -12,8 +14,10 @@ import { PortalShell } from "@/components/portal/portal-renderer";
 
 export default async function PortalCataloguePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organizationSlug: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const { organizationSlug } = await params;
   const [organization, user] = await Promise.all([
@@ -23,7 +27,13 @@ export default async function PortalCataloguePage({
   if (!organization?.portal || organization.portal.status !== "PUBLISHED") {
     notFound();
   }
-  const courses = await getPortalCourses(organization.id);
+  const search = await searchParams;
+  const catalogue = await getPortalCourseCatalogue(
+    organization.id,
+    search.q,
+    search.page,
+  );
+  const { courses } = catalogue;
 
   return (
     <PortalShell
@@ -32,7 +42,11 @@ export default async function PortalCataloguePage({
       theme={publishedTheme(organization.portal)}
       signedIn={Boolean(user)}
     >
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8"
+      >
         <div>
           <h1 className="text-4xl font-semibold tracking-tight">
             Course catalogue
@@ -41,6 +55,15 @@ export default async function PortalCataloguePage({
             Browse published courses from {organization.name}.
           </p>
         </div>
+        <form className="mt-6 max-w-sm">
+          <Input
+            type="search"
+            name="q"
+            aria-label="Search courses"
+            placeholder="Search courses"
+            defaultValue={search.q}
+          />
+        </form>
         {courses.length > 0 ? (
           <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {courses.map((course) => (
@@ -61,6 +84,11 @@ export default async function PortalCataloguePage({
             className="mt-8"
           />
         )}
+        <CataloguePagination
+          {...catalogue}
+          basePath={`/s/${organization.slug}/courses`}
+          query={search.q}
+        />
       </main>
     </PortalShell>
   );

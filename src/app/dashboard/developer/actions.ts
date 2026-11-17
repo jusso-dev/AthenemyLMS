@@ -12,6 +12,7 @@ import {
   createWebhookEndpoint,
   webhookEventTypes,
 } from "@/lib/developer/webhooks";
+import { replayWebhookDelivery } from "@/lib/developer/webhook-worker";
 import { missingEnv } from "@/lib/env";
 import { canManageOrganization } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
@@ -121,5 +122,26 @@ async function requireDeveloperAccess(
   });
   if (!canManageOrganization(user, membership)) {
     throw new Error("Organisation admin access is required.");
+  }
+}
+
+export async function replayWebhookDeliveryFormAction(
+  _previousState: ActionFormState,
+  formData: FormData,
+) {
+  try {
+    const user = await requireAppUser();
+    const organizationId = String(formData.get("organizationId") ?? "");
+    await requireDeveloperAccess(user, organizationId);
+    await replayWebhookDelivery(
+      organizationId,
+      String(formData.get("deliveryId") ?? ""),
+    );
+    revalidatePath("/dashboard/developer");
+    return actionSuccess(
+      "Delivery replay queued. The original event ID is preserved.",
+    );
+  } catch (error) {
+    return actionError(error);
   }
 }

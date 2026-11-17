@@ -22,7 +22,32 @@ STRIPE_WEBHOOK_SECRET=
 
 ## Webhook Behaviour
 
-`checkout.session.completed` verifies the Stripe signature, creates or updates the payment record, and creates an active enrollment.
+Use webhook API version `2026-08-26.dahlia` and subscribe to
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, `checkout.session.expired`,
+`charge.refunded`, `charge.dispute.created`, `charge.dispute.updated`, and
+`charge.dispute.closed`.
+
+Checkout persists the expected purchase before redirecting. The webhook verifies
+the signature and purchase details, then grants access only after confirmed
+payment. Pending delayed payments grant no access; later success fulfils them,
+while failure/expiry updates pending payment state. Repeated events preserve
+completed enrolments and use per-email checkpoints plus provider idempotency keys.
+Temporary processing failures remain retryable, including a reversal that arrives
+before Checkout has persisted its PaymentIntent mapping.
+
+Partial refunds retain access and reduce net revenue. A full refund revokes access.
+Open/lost disputes suspend access; a won dispute restores the previous active or
+completed state only when a purchase reversal suspended it. Manual cancellation is
+never undone by dispute resolution. Another valid paid purchase preserves access.
+Refund amounts never regress on older events, terminal disputes ignore stale
+updates, and old checkout success cannot reopen a refunded/disputed purchase.
+Transitions and outbox events commit together. Historical certificates remain
+records of past achievement. Operators initiate refunds and handle disputes in
+Stripe; no refund-creation UI or subscription/bundle/coupon fulfilment is implied.
+
+Local integration tests generate real Stripe signatures and use the handler with
+PostgreSQL and mocked delivery; they never contact Stripe or move money.
 
 ## Customer Billing Portal
 

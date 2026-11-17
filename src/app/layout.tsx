@@ -34,6 +34,7 @@ export default function RootLayout({
   const html = (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
@@ -48,7 +49,7 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <div id="main-content">{children}</div>
+        {children}
       </body>
     </html>
   );

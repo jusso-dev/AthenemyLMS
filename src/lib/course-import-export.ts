@@ -103,9 +103,15 @@ export async function buildCourseExport(courseId: string) {
   } satisfies CourseExport;
 }
 
-export async function importCourse(input: unknown, instructorId: string) {
+export async function importCourse(
+  input: unknown,
+  instructorId: string,
+  organizationId?: string,
+) {
   const parsed = courseExportSchema.parse(input);
-  const slug = await uniqueCourseSlug(parsed.course.slug || slugify(parsed.course.title));
+  const slug = await uniqueCourseSlug(
+    parsed.course.slug || slugify(parsed.course.title),
+  );
 
   return prisma.course.create({
     data: {
@@ -120,6 +126,7 @@ export async function importCourse(input: unknown, instructorId: string) {
       level: parsed.course.level,
       durationMinutes: parsed.course.durationMinutes,
       instructorId,
+      organizationId,
       sections: {
         create: parsed.course.sections.map((section) => ({
           title: section.title,
@@ -152,7 +159,9 @@ export async function importCourse(input: unknown, instructorId: string) {
 
 async function uniqueCourseSlug(baseSlug: string) {
   const normalized = slugify(baseSlug);
-  const existing = await prisma.course.findUnique({ where: { slug: normalized } });
+  const existing = await prisma.course.findUnique({
+    where: { slug: normalized },
+  });
   if (!existing) return normalized;
   return `${normalized}-import-${Date.now()}`;
 }

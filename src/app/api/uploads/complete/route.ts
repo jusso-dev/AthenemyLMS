@@ -1,43 +1,77 @@
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getCurrentAppUser } from "@/lib/auth";
 import { canManageOrganization } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
+import { assetStorageKey, parseAssetTags } from "@/lib/assets";
 import {
-  assetStorageKey,
-  parseAssetTags,
-  validateImageAsset,
-} from "@/lib/assets";
+  decodeImageUpload,
+  readUploadJson,
+  UploadValidationError,
+} from "@/lib/upload-validation";
+import { env, missingEnv, IntegrationSetupError } from "@/lib/env";
+import { getR2Client } from "@/lib/r2";
 
 const completeSchema = z.object({
-  key: z.string().min(1).optional(),
-  publicUrl: z.string().url().optional(),
-  fileName: z.string().min(1),
+  key: z.string().min(1).max(600).optional(),
+  publicUrl: z.string().url().max(2000).optional(),
+  fileName: z.string().trim().min(1).max(240),
   contentType: z.string().min(3).max(120).optional(),
   fileSize: z.number().int().positive().optional(),
-  organizationId: z.string().min(1).optional(),
+  organizationId: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .optional(),
   kind: z.enum(["IMAGE"]).default("IMAGE"),
   dataUrl: z.string().optional(),
-  width: z.number().int().positive().optional(),
-  height: z.number().int().positive().optional(),
-  altText: z.string().max(180).optional().or(z.literal("")),
-  caption: z.string().max(240).optional().or(z.literal("")),
-  tags: z.string().max(400).optional().or(z.literal("")),
+  altText: z.string().max(180).optional(),
+  caption: z.string().max(240).optional(),
+  tags: z.string().max(400).optional(),
 });
 
 export async function POST(request: Request) {
-  const user = await getCurrentAppUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: "Authentication required" },
-      { status: 401 },
-    );
-  }
-
-  const parsed = completeSchema.parse(await request.json());
-  if (parsed.organizationId) {
+  try {
+    const user = await getCurrentAppUser();
+    if (!user)
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
+    const parsed = completeSchema.parse(await readUploadJson(request));
+    if (!parsed.organizationId) {
+      const allowedPrefix = /^(thumbnails|resources|videos)\//.test(
+        parsed.key ?? "",
+      );
+      const ownedKey = parsed.key?.split("/")[1] === user.id;
+      const expectedUrl =
+        env.CLOUDFLARE_R2_PUBLIC_BASE_URL && parsed.key
+          ? `${env.CLOUDFLARE_R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${parsed.key}`
+          : null;
+      if (
+        !allowedPrefix ||
+        !ownedKey ||
+        !expectedUrl ||
+        parsed.publicUrl !== expectedUrl
+      ) {
+        throw new UploadValidationError(
+          "A valid upload belonging to your account is required.",
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        file: {
+          key: parsed.key,
+          publicUrl: parsed.publicUrl,
+          fileName: parsed.fileName,
+          fileSize: parsed.fileSize,
+        },
+        message: "Upload completed. Save the course or resource to attach it.",
+      });
+    }
     const membership = await prisma.organizationMembership.findUnique({
       where: {
         organizationId_userId: {
@@ -52,54 +86,76 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
-
-    const mimeType = parsed.contentType ?? mimeTypeFromDataUrl(parsed.dataUrl);
-    validateImageAsset({
-      fileName: parsed.fileName,
-      mimeType,
-      sizeBytes: parsed.fileSize,
+    if (!parsed.dataUrl)
+      throw new UploadValidationError("Image file data is required.");
+    const image = await decodeImageUpload(parsed.dataUrl, parsed.contentType);
+    const storageKey = assetStorageKey({
+      organizationId: parsed.organizationId,
+      fileName: `${randomUUID()}-${parsed.fileName}`,
+      mimeType: image.mimeType,
     });
-
-    const localUpload = parsed.dataUrl
-      ? await persistLocalAsset({
-          organizationId: parsed.organizationId,
-          fileName: parsed.fileName,
-          dataUrl: parsed.dataUrl,
-        })
-      : null;
-    const storageKey =
-      parsed.key ??
-      localUpload?.storageKey ??
-      assetStorageKey({
-        organizationId: parsed.organizationId,
-        fileName: parsed.fileName,
-      });
-    const url = parsed.publicUrl ?? localUpload?.url;
-    if (!url) {
+    const r2Configured =
+      missingEnv([
+        "CLOUDFLARE_R2_ACCOUNT_ID",
+        "CLOUDFLARE_R2_ACCESS_KEY_ID",
+        "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
+        "CLOUDFLARE_R2_BUCKET_NAME",
+        "CLOUDFLARE_R2_PUBLIC_BASE_URL",
+      ]).length === 0;
+    if (!r2Configured && process.env.NODE_ENV === "production") {
       return NextResponse.json(
-        { error: "Upload URL is required." },
-        { status: 400 },
+        { error: "Durable image storage is not configured." },
+        { status: 503 },
       );
     }
-
-    const asset = await prisma.organizationAsset.create({
-      data: {
-        organizationId: parsed.organizationId,
-        uploadedById: user.id,
-        kind: "IMAGE",
-        storageKey,
-        url,
-        filename: parsed.fileName,
-        mimeType,
-        sizeBytes: parsed.fileSize,
-        width: parsed.width,
-        height: parsed.height,
-        altText: parsed.altText || null,
-        caption: parsed.caption || null,
-        tags: parseAssetTags(parsed.tags),
-      },
-    });
-
+    let url: string;
+    let removeUpload: () => Promise<unknown>;
+    if (r2Configured) {
+      const client = getR2Client();
+      const object = {
+        Bucket: env.CLOUDFLARE_R2_BUCKET_NAME!,
+        Key: storageKey,
+      };
+      await client.send(
+        new PutObjectCommand({
+          ...object,
+          Body: image.bytes,
+          ContentType: image.mimeType,
+          ContentLength: image.bytes.length,
+        }),
+      );
+      url = `${env.CLOUDFLARE_R2_PUBLIC_BASE_URL!.replace(/\/$/, "")}/${storageKey}`;
+      removeUpload = () => client.send(new DeleteObjectCommand(object));
+    } else {
+      const destination = path.join(process.cwd(), "public", storageKey);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, image.bytes, { flag: "wx" });
+      url = `/${storageKey}`;
+      removeUpload = () => unlink(destination);
+    }
+    let asset;
+    try {
+      asset = await prisma.organizationAsset.create({
+        data: {
+          organizationId: parsed.organizationId,
+          uploadedById: user.id,
+          kind: "IMAGE",
+          storageKey,
+          url,
+          filename: parsed.fileName,
+          mimeType: image.mimeType,
+          sizeBytes: image.bytes.length,
+          width: image.width,
+          height: image.height,
+          altText: parsed.altText || null,
+          caption: parsed.caption || null,
+          tags: parseAssetTags(parsed.tags),
+        },
+      });
+    } catch (error) {
+      await removeUpload().catch(() => undefined);
+      throw error;
+    }
     return NextResponse.json({
       ok: true,
       asset,
@@ -111,52 +167,27 @@ export async function POST(request: Request) {
       },
       message: "Image added to the media library.",
     });
-  }
-
-  if (!parsed.key || !parsed.publicUrl) {
+  } catch (error) {
+    if (error instanceof IntegrationSetupError) {
+      return NextResponse.json(
+        { error: "Durable image storage is not configured." },
+        { status: 503 },
+      );
+    }
+    if (error instanceof z.ZodError || error instanceof UploadValidationError) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof UploadValidationError
+              ? error.message
+              : "Invalid upload fields.",
+        },
+        { status: 400 },
+      );
+    }
     return NextResponse.json(
-      { error: "key and publicUrl are required" },
-      { status: 400 },
+      { error: "Upload could not be saved. Please try again." },
+      { status: 500 },
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    file: {
-      key: parsed.key,
-      publicUrl: parsed.publicUrl,
-      fileName: parsed.fileName,
-      fileSize: parsed.fileSize,
-    },
-    message:
-      "Upload completed. Persist this file against a course thumbnail or lesson resource in the next form step.",
-  });
-}
-
-function mimeTypeFromDataUrl(dataUrl: string | undefined) {
-  const match = dataUrl?.match(/^data:([^;]+);base64,/);
-  return match?.[1] ?? "";
-}
-
-async function persistLocalAsset(input: {
-  organizationId: string;
-  fileName: string;
-  dataUrl: string;
-}) {
-  const match = input.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) throw new Error("Upload payload is invalid.");
-
-  const storageKey = assetStorageKey({
-    organizationId: input.organizationId,
-    fileName: input.fileName,
-  });
-  const buffer = Buffer.from(match[2], "base64");
-  const destination = path.join(process.cwd(), "public", storageKey);
-  await mkdir(path.dirname(destination), { recursive: true });
-  await writeFile(destination, buffer);
-
-  return {
-    storageKey,
-    url: `/${storageKey}`,
-  };
 }

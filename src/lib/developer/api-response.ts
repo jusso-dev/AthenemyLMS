@@ -7,8 +7,6 @@ export function apiJson<T>(
   const requestId = init?.requestId ?? createRequestId();
   const response = NextResponse.json(body, init);
   response.headers.set("x-request-id", requestId);
-  response.headers.set("x-ratelimit-limit", "600");
-  response.headers.set("x-ratelimit-remaining", "599");
   return response;
 }
 
@@ -17,14 +15,21 @@ export function apiError(
   fallback = "The request could not be completed.",
 ) {
   const requestId = createRequestId();
-  const status =
+  const requestedStatus =
     typeof error === "object" &&
     error !== null &&
     "status" in error &&
     typeof error.status === "number"
       ? error.status
       : 500;
+  const status =
+    Number.isInteger(requestedStatus) &&
+    requestedStatus >= 400 &&
+    requestedStatus <= 599
+      ? requestedStatus
+      : 500;
   const code =
+    status < 500 &&
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
@@ -33,7 +38,8 @@ export function apiError(
       : status === 500
         ? "internal_error"
         : "request_error";
-  const message = error instanceof Error ? error.message : fallback;
+  const message =
+    status < 500 && error instanceof Error ? error.message : fallback;
 
   return apiJson(
     {
@@ -52,10 +58,15 @@ export function createRequestId() {
 }
 
 export function parsePagination(url: URL) {
-  const take = Math.min(
-    100,
-    Math.max(1, Number(url.searchParams.get("limit") ?? 25)),
-  );
+  const rawLimit = url.searchParams.get("limit") ?? "25";
+  const limit = Number(rawLimit);
+  if (!/^\d+$/.test(rawLimit) || !Number.isSafeInteger(limit) || limit < 1) {
+    throw Object.assign(new Error("limit must be a positive integer."), {
+      status: 400,
+      code: "invalid_request",
+    });
+  }
+  const take = Math.min(100, limit);
   const cursor = url.searchParams.get("cursor") ?? undefined;
   return { take, cursor };
 }

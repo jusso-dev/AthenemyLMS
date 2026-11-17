@@ -71,6 +71,15 @@ export const assessmentSchema = z.object({
     .max(600)
     .optional()
     .or(z.literal("")),
+  closesAt: z
+    .string()
+    .datetime({
+      offset: true,
+      message:
+        "Use an ISO closing time with timezone, e.g. 2026-12-01T17:00:00+11:00",
+    })
+    .optional()
+    .or(z.literal("")),
   feedbackMode: z
     .enum(["IMMEDIATE", "AFTER_PASSING", "AFTER_CLOSE", "HIDDEN"])
     .default("IMMEDIATE"),
@@ -93,6 +102,15 @@ export const assessmentSettingsSchema = z.object({
     .int()
     .min(1)
     .max(600)
+    .optional()
+    .or(z.literal("")),
+  closesAt: z
+    .string()
+    .datetime({
+      offset: true,
+      message:
+        "Use an ISO closing time with timezone, e.g. 2026-12-01T17:00:00+11:00",
+    })
     .optional()
     .or(z.literal("")),
   feedbackMode: z
@@ -120,8 +138,6 @@ export const invitationSchema = z.object({
 export const organizationMemberSchema = z.object({
   organizationId: z.string().min(1),
   membershipId: z.string().min(1),
-  name: z.string().max(120).optional().or(z.literal("")),
-  appRole: z.enum(["STUDENT", "INSTRUCTOR", "ADMIN"]),
   orgRole: z.enum(["OWNER", "ADMIN", "INSTRUCTOR", "MEMBER"]),
 });
 

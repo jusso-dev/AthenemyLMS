@@ -19,7 +19,12 @@ export function validateImageAsset(input: AssetValidationInput) {
     throw new Error("Upload a JPG, PNG, or WebP image.");
   }
 
-  if (input.sizeBytes && input.sizeBytes > maxImageUploadBytes) {
+  if (
+    input.sizeBytes != null &&
+    (!Number.isSafeInteger(input.sizeBytes) ||
+      input.sizeBytes <= 0 ||
+      input.sizeBytes > maxImageUploadBytes)
+  ) {
     throw new Error("Images must be 5 MB or smaller.");
   }
 
@@ -31,11 +36,26 @@ export function validateImageAsset(input: AssetValidationInput) {
 export function assetStorageKey(input: {
   organizationId: string;
   fileName: string;
+  mimeType?: string;
 }) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(input.organizationId)) {
+    throw new Error("Invalid organisation identifier.");
+  }
   const extension = input.fileName.split(".").pop()?.toLowerCase();
   const baseName = input.fileName.replace(/\.[^.]+$/, "");
-  const safeName = slugify(baseName) || "asset";
-  const suffix = extension ? `.${extension}` : "";
+  const safeName = slugify(baseName).slice(0, 160) || "asset";
+  const canonicalExtension = input.mimeType
+    ? { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[
+        input.mimeType
+      ]
+    : extension;
+  if (
+    !canonicalExtension ||
+    !["png", "jpg", "jpeg", "webp"].includes(canonicalExtension)
+  ) {
+    throw new Error("Upload a JPG, PNG, or WebP image.");
+  }
+  const suffix = `.${canonicalExtension}`;
   return `portal-assets/${input.organizationId}/${Date.now()}-${safeName}${suffix}`;
 }
 

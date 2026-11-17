@@ -39,6 +39,7 @@ describe("organizations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.prisma.$transaction.mockResolvedValue([]);
+    mocks.prisma.organization.create.mockResolvedValue({ id: "org_new" });
     mocks.prisma.course.findMany.mockResolvedValue([]);
     mocks.prisma.enrollment.createMany.mockResolvedValue({ count: 0 });
     mocks.templates.instantiateDefaultCourseTemplate.mockResolvedValue({
@@ -66,7 +67,7 @@ describe("organizations", () => {
 
   it("creates an organisation with owner membership", async () => {
     mocks.prisma.user.update.mockReturnValue({ user: true });
-    mocks.prisma.organization.create.mockReturnValue({ organization: true });
+    mocks.prisma.organization.create.mockResolvedValue({ id: "org_new" });
     mocks.prisma.$transaction.mockResolvedValue([
       { user: true },
       { organization: true },
@@ -85,14 +86,7 @@ describe("organizations", () => {
         memberships: { create: { userId: "user_1", role: "OWNER" } },
       }),
     });
-    expect(mocks.prisma.user.update).toHaveBeenCalledWith({
-      where: { id: "user_1" },
-      data: { role: "ADMIN" },
-    });
-    expect(mocks.prisma.$transaction).toHaveBeenCalledWith([
-      { user: true },
-      { organization: true },
-    ]);
+    expect(mocks.prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("instantiates starter templates passed in during onboarding", async () => {
@@ -155,5 +149,8 @@ describe("organizations", () => {
       organizationId: "org_1",
       userId: "user_1",
     });
+    expect(mocks.prisma.organizationMembership.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: {} }),
+    );
   });
 });

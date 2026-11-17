@@ -52,7 +52,9 @@ test("default course library renders template cards", async ({ page }) => {
   await expectNoRuntimeFailure(page);
 });
 
-test("developer docs page lists scopes and webhook events", async ({ page }) => {
+test("developer docs page lists scopes and webhook events", async ({
+  page,
+}) => {
   await page.goto("/dashboard/developer/docs");
   await expect(
     page.getByRole("heading", { name: "API documentation" }),
@@ -92,9 +94,9 @@ test("automations route surfaces execution mode and recipes", async ({
   await expect(
     page.getByRole("heading", { name: "Automations" }),
   ).toBeVisible();
-  await expect(page.getByText("Inline execution mode")).toBeVisible();
+  await expect(page.getByText("database-worker", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Recipes" }),
+    page.getByRole("heading", { name: "Recipes", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Enrollment welcome")).toBeVisible();
   await expectNoRuntimeFailure(page);

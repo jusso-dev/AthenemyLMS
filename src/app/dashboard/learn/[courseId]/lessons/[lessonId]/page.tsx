@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +38,28 @@ export default async function LessonPlayerPage({
 
   const completedIds: string[] = completedLessonIds;
   const lessons = course?.sections.flatMap((section) => section.lessons) ?? [];
-  const lesson = lessons.find((item) => item.id === lessonId) ?? lessons[0];
+  const lesson = lessons.find((item) => item.id === lessonId);
+  if (course && !lesson) notFound();
+  const packages =
+    mode === "database" && lesson && user
+      ? await prisma.externalPackage.findMany({
+          where: {
+            courseId,
+            lessonId: lesson.id,
+            type: "SCORM_12",
+            status: "READY",
+          },
+          select: {
+            id: true,
+            title: true,
+            attempts: {
+              where: { userId: user.id },
+              select: { completionStatus: true },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
   const activeSection = course?.sections.find((section) =>
     section.lessons.some((item) => item.id === lesson?.id),
   );
@@ -110,16 +132,40 @@ export default async function LessonPlayerPage({
             )}
             {mode === "database" && lesson ? (
               <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <ActionForm
-                  action={markLessonCompleteFormAction.bind(null, lesson.id)}
-                >
-                  <PendingSubmitButton pendingLabel="Updating...">
-                    <CheckCircle2 className="h-4 w-4" />
-                    {completedIds.includes(lesson.id)
-                      ? "Completed"
-                      : "Mark complete"}
-                  </PendingSubmitButton>
-                </ActionForm>
+                {packages.length ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Complete the packages below to finish this lesson.
+                    </p>
+                    {packages.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <Button asChild variant="outline">
+                          <Link
+                            href={`/dashboard/learn/${courseId}/scorm/${item.id}`}
+                          >
+                            {item.title}
+                          </Link>
+                        </Button>
+                        {item.attempts.some((attempt) =>
+                          ["passed", "completed"].includes(
+                            attempt.completionStatus,
+                          ),
+                        ) && <span className="text-sm">Completed</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ActionForm
+                    action={markLessonCompleteFormAction.bind(null, lesson.id)}
+                  >
+                    <PendingSubmitButton pendingLabel="Updating...">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {completedIds.includes(lesson.id)
+                        ? "Completed"
+                        : "Mark complete"}
+                    </PendingSubmitButton>
+                  </ActionForm>
+                )}
                 <div className="flex gap-2">
                   {previousLesson ? (
                     <Button asChild variant="outline">

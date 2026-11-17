@@ -1,22 +1,21 @@
 import { createHmac, randomBytes } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveWebhookDestination } from "@/lib/developer/webhook-transport";
+import { encryptWebhookSecret } from "@/lib/developer/webhook-secrets";
 import { hashApiSecret } from "@/lib/developer/api-keys";
 
 export const webhookEventTypes = [
-  "user.created",
-  "organization.member.created",
-  "organization.invitation.created",
-  "course.published",
   "enrollment.created",
   "lesson.completed",
-  "assessment.submission.created",
   "assessment.passed",
   "assessment.failed",
   "course.completed",
   "certificate.issued",
   "payment.succeeded",
   "payment.failed",
+  "payment.refunded",
+  "payment.disputed",
 ] as const;
 
 export type WebhookEventType = (typeof webhookEventTypes)[number];
@@ -66,25 +65,52 @@ export async function createWebhookEndpoint(input: {
   eventTypes: string[];
   createdById?: string | null;
 }) {
+  if (
+    typeof input.url !== "string" ||
+    !Array.isArray(input.eventTypes) ||
+    input.eventTypes.some((type) => !isWebhookEventType(type))
+  )
+    throw Object.assign(new Error("Invalid webhook URL or event types."), {
+      status: 400,
+      code: "invalid_request",
+    });
+  await resolveWebhookDestination(input.url);
   const secret = createWebhookSecret();
+  const signingSecretEncrypted = encryptWebhookSecret(
+    secret,
+    input.organizationId,
+  );
   const endpoint = await prisma.webhookEndpoint.create({
     data: {
       organizationId: input.organizationId,
       url: input.url,
       eventTypes: input.eventTypes.filter(isWebhookEventType),
       secretHash: hashApiSecret(secret),
+      signingSecretEncrypted,
       createdById: input.createdById ?? null,
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      url: true,
+      eventTypes: true,
+      active: true,
+      createdAt: true,
     },
   });
   return { endpoint, secret };
 }
 
-export async function enqueueWebhookDeliveries(input: {
-  organizationId: string;
-  type: WebhookEventType | string;
-  data: Record<string, unknown>;
-}) {
-  const endpoints = await prisma.webhookEndpoint.findMany({
+export async function enqueueWebhookDeliveries(
+  input: {
+    organizationId: string;
+    type: WebhookEventType | string;
+    data: Record<string, unknown>;
+    eventKey?: string;
+  },
+  db: Prisma.TransactionClient = prisma,
+) {
+  const endpoints = await db.webhookEndpoint.findMany({
     where: {
       organizationId: input.organizationId,
       active: true,
@@ -97,7 +123,7 @@ export async function enqueueWebhookDeliveries(input: {
   if (endpoints.length === 0) return { count: 0 };
 
   const payload = {
-    id: `evt_${crypto.randomUUID().replaceAll("-", "")}`,
+    id: input.eventKey ?? `evt_${crypto.randomUUID().replaceAll("-", "")}`,
     type: input.type,
     createdAt: new Date().toISOString(),
     organizationId: input.organizationId,
@@ -105,9 +131,11 @@ export async function enqueueWebhookDeliveries(input: {
     apiVersion: "2026-05-17" as const,
   } satisfies WebhookPayload;
 
-  return prisma.webhookDelivery.createMany({
+  return db.webhookDelivery.createMany({
+    skipDuplicates: true,
     data: endpoints.map((endpoint) => ({
       endpointId: endpoint.id,
+      eventKey: input.eventKey ?? payload.id,
       eventType: input.type,
       payload: payload as unknown as Prisma.InputJsonObject,
     })),

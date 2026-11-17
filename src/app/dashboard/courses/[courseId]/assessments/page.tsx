@@ -118,11 +118,12 @@ export default async function CourseAssessmentsPage({
                   disabled={databaseMissing || !allowed}
                 />
                 <Input
+                  aria-label="Time limit in minutes"
                   name="timeLimitMinutes"
                   type="number"
                   min="1"
                   max="600"
-                  placeholder="Time limit"
+                  placeholder="Time limit in minutes"
                   disabled={databaseMissing || !allowed}
                 />
                 <label className="grid gap-2 text-sm font-medium">
@@ -140,6 +141,14 @@ export default async function CourseAssessmentsPage({
                   </select>
                 </label>
               </div>
+              <label className="grid gap-2 text-sm font-medium">
+                Closing time (optional, ISO date with timezone)
+                <Input
+                  name="closesAt"
+                  placeholder="2026-12-01T17:00:00+11:00"
+                  disabled={databaseMissing || !allowed}
+                />
+              </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"

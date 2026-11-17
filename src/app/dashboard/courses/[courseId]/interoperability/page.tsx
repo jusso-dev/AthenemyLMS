@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { uploadScormPackageFormAction } from "@/app/dashboard/courses/actions";
+import { uploadScormPackageFormAction } from "@/app/dashboard/courses/scorm-actions";
 import { getCurrentAppUser } from "@/lib/auth";
 import { databaseIsConfigured, fallbackNotice } from "@/lib/dashboard-data";
 import { canManageCourse } from "@/lib/permissions";
@@ -62,7 +62,7 @@ export default async function InteroperabilityPage({
       <PageHeader
         eyebrow={course?.title ?? "Course"}
         title="Interoperability"
-        description="Register SCORM packages now, with xAPI and LTI foundations ready for tracked runtime expansion."
+        description="Import SCORM 1.2 content with private delivery, saved progress, and lesson completion."
       />
       <CourseManagementNav courseId={courseId} />
       {!course || !allowed ? (
@@ -114,17 +114,17 @@ export default async function InteroperabilityPage({
                   </label>
                   <PendingSubmitButton
                     className="w-fit"
-                    pendingLabel="Parsing..."
+                    pendingLabel="Importing..."
                   >
                     <Upload className="h-4 w-4" />
-                    Register package
+                    Import package
                   </PendingSubmitButton>
                 </ActionForm>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Registered packages</CardTitle>
+                <CardTitle>Imported packages</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {course.externalPackages.length === 0 ? (
@@ -176,8 +176,8 @@ export default async function InteroperabilityPage({
           <aside className="space-y-4">
             <FoundationCard
               icon={FileArchive}
-              title="SCORM foundation"
-              text="SCORM 1.2 manifests are parsed and stored with course or lesson assignments. Runtime tracking primitives are available for completion, score, time, and suspend data."
+              title="SCORM 1.2 player"
+              text="Single-SCO HTML packages run in an isolated player. Completion, score, time, bookmark, and suspend data are saved. Import ZIPs up to 20 MB. xAPI, LTI, and multi-SCO sequencing are not implemented."
             />
             <FoundationCard
               icon={RadioTower}

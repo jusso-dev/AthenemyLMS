@@ -5,8 +5,14 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
-      <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-        <h1 className="text-4xl font-semibold tracking-tight">About Athenemy</h1>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8"
+      >
+        <h1 className="text-4xl font-semibold tracking-tight">
+          About Athenemy
+        </h1>
         <div className="mt-6 space-y-5 text-muted-foreground">
           <p>
             Athenemy is a clean LMS foundation for creators, teams, and small

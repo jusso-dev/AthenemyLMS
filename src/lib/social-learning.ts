@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { canManageCourse } from "@/lib/permissions";
 import type { AppUser } from "@/lib/auth";
+import { hasLearningAccess } from "@/lib/learning";
 
 export async function createCohort(input: {
   actor: AppUser;
@@ -53,8 +54,15 @@ export async function createDiscussionThread(input: {
     enrollment?.course ??
     (await prisma.course.findUnique({ where: { id: input.courseId } }));
   if (!course?.organizationId) throw new Error("Course not found.");
-  if (!enrollment && !canManageCourse(input.actor, course)) {
+  if (!hasLearningAccess(enrollment) && !canManageCourse(input.actor, course)) {
     throw new Error("Enrollment is required to post in this discussion.");
+  }
+  if (input.lessonId) {
+    const lesson = await prisma.lesson.findFirst({
+      where: { id: input.lessonId, section: { courseId: input.courseId } },
+      select: { id: true },
+    });
+    if (!lesson) throw new Error("Lesson not found in this course.");
   }
 
   return prisma.discussionThread.create({

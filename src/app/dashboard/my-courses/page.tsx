@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { Award, BookOpen, ClipboardCheck, GraduationCap, PlayCircle } from "lucide-react";
+import {
+  Award,
+  BookOpen,
+  ClipboardCheck,
+  GraduationCap,
+  PlayCircle,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,8 +31,8 @@ export default async function MyCoursesPage({
   const user = await getCurrentAppUser();
   const { mode, courses, summary } = await getMyCourses(user);
   const filteredCourses = courses.filter((item) => {
-    if (status === "active") return item.progressPercent < 100;
-    if (status === "completed") return item.progressPercent === 100;
+    if (status === "active") return !item.complete;
+    if (status === "completed") return item.complete;
     return true;
   });
 
@@ -136,12 +142,8 @@ export default async function MyCoursesPage({
                   {item.course.sourceTemplateId ? (
                     <Badge variant="outline">From template</Badge>
                   ) : null}
-                  <Badge
-                    variant={
-                      item.progressPercent === 100 ? "success" : "secondary"
-                    }
-                  >
-                    {item.progressPercent === 100 ? "Complete" : "Active"}
+                  <Badge variant={item.complete ? "success" : "secondary"}>
+                    {item.complete ? "Complete" : "Active"}
                   </Badge>
                 </div>
               </div>
@@ -156,7 +158,10 @@ export default async function MyCoursesPage({
             <CardContent className="flex flex-1 flex-col gap-4">
               <div className="grid gap-3 text-sm sm:grid-cols-3">
                 <div className="rounded-md border bg-muted/25 p-3">
-                  <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
+                  <BookOpen
+                    className="h-4 w-4 text-primary"
+                    aria-hidden="true"
+                  />
                   <p className="mt-2 font-medium">{item.totalLessons}</p>
                   <p className="text-xs text-muted-foreground">Lessons</p>
                 </div>

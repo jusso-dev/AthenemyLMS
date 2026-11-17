@@ -1,5 +1,13 @@
 "use server";
 
+import { recordCourseEvent } from "@/lib/learning-events";
+
+import { recordLearningEvent } from "@/lib/automations/events";
+import {
+  assessmentTransaction,
+  startOrResumeAssessmentAttempt,
+} from "@/lib/assessment-attempts";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { CourseStatus, Prisma } from "@prisma/client";
@@ -15,12 +23,22 @@ import {
   sectionSchema,
 } from "@/lib/course-schemas";
 import { missingEnv } from "@/lib/env";
-import { canManageCourse, hasRole } from "@/lib/permissions";
+import { canAuthorCourses, canManageCourse } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { requireAppUser } from "@/lib/auth";
 import { issueCertificate } from "@/lib/certificates";
 import { sendCoursePublishedEmail } from "@/lib/email";
-import { parseQuizOptions, scoreQuiz } from "@/lib/assessments";
+import {
+  assertSupportedAssessmentSettings,
+  parseAssessmentAnswers,
+  parseQuizOptions,
+  scoreQuiz,
+} from "@/lib/assessments";
+import {
+  hasLearningAccess,
+  learningTransaction,
+  reconcileLearningCompletion,
+} from "@/lib/learning";
 import { slugify } from "@/lib/utils";
 import {
   buildPresentationCourseDraft,
@@ -28,7 +46,6 @@ import {
 } from "@/lib/presentation-import";
 import { instantiateDefaultCourseTemplate } from "@/lib/course-templates";
 import { getCoursePublishReadiness } from "@/lib/course-readiness";
-import { parseScorm12Manifest } from "@/lib/scorm";
 import {
   actionError,
   actionSuccess,
@@ -379,81 +396,11 @@ export async function submitAssessmentFormAction(
   );
 }
 
-export async function uploadScormPackageFormAction(
-  courseId: string,
-  _previousState: ActionFormState,
-  formData: FormData,
-) {
-  return runAction(
-    () => uploadScormPackageAction(courseId, formData),
-    "SCORM package registered.",
-  );
-}
-
 export async function updateProfileFormAction(
   _previousState: ActionFormState,
   formData: FormData,
 ) {
   return runAction(() => updateProfileAction(formData), "Profile saved.");
-}
-
-export async function uploadScormPackageAction(
-  courseId: string,
-  formData: FormData,
-) {
-  assertDatabaseConfigured();
-
-  const user = await requireAppUser();
-  const course = await prisma.course.findUnique({
-    where: { id: courseId },
-    include: {
-      sections: { include: { lessons: { select: { id: true } } } },
-    },
-  });
-  if (!course || !canManageCourse(user, course)) {
-    throw new Error("You do not have permission to manage this course.");
-  }
-
-  const lessonId = String(formData.get("lessonId") ?? "");
-  if (lessonId) {
-    const lessonIds = new Set(
-      course.sections.flatMap((section) =>
-        section.lessons.map((lesson) => lesson.id),
-      ),
-    );
-    if (!lessonIds.has(lessonId)) {
-      throw new Error("Choose a lesson from this course.");
-    }
-  }
-
-  const file = formData.get("packageFile");
-  if (!(file instanceof File) || file.size === 0) {
-    throw new Error("Upload a SCORM 1.2 .zip package.");
-  }
-  if (!file.name.toLowerCase().endsWith(".zip")) {
-    throw new Error("SCORM packages must be uploaded as .zip files.");
-  }
-
-  const manifest = await parseScorm12Manifest(await file.arrayBuffer());
-  await prisma.externalPackage.create({
-    data: {
-      organizationId: course.organizationId,
-      courseId,
-      lessonId: lessonId || null,
-      uploadedById: user.id,
-      type: "SCORM_12",
-      status: "READY",
-      title: manifest.title,
-      identifier: manifest.identifier,
-      version: manifest.version,
-      storageKey: `scorm/${courseId}/${Date.now()}-${file.name}`,
-      launchPath: manifest.launchPath,
-      manifest,
-    },
-  });
-
-  revalidatePath(`/dashboard/courses/${courseId}/interoperability`);
-  revalidatePath(`/dashboard/courses/${courseId}/studio`);
 }
 
 export async function markLessonCompleteFormAction(
@@ -469,7 +416,7 @@ export async function markLessonCompleteFormAction(
 
 async function createCourse(formData: FormData) {
   const user = await requireAppUser();
-  if (!hasRole(user.role, "INSTRUCTOR")) {
+  if (!canAuthorCourses(user)) {
     throw new Error("Instructor or admin role required.");
   }
 
@@ -507,7 +454,7 @@ async function createCourse(formData: FormData) {
 
 async function importPresentationCourse(formData: FormData) {
   const user = await requireAppUser();
-  if (!hasRole(user.role, "INSTRUCTOR")) {
+  if (!canAuthorCourses(user)) {
     throw new Error("Instructor or admin role required.");
   }
 
@@ -565,7 +512,7 @@ async function importPresentationCourse(formData: FormData) {
 
 async function primaryOrganizationIdForUser(userId: string) {
   const membership = await prisma.organizationMembership.findFirst({
-    where: { userId },
+    where: { userId, role: { in: ["OWNER", "ADMIN", "INSTRUCTOR"] } },
     orderBy: { createdAt: "asc" },
     select: { organizationId: true },
   });
@@ -575,7 +522,7 @@ async function primaryOrganizationIdForUser(userId: string) {
 async function enableCourseTemplateAction(formData: FormData) {
   assertDatabaseConfigured();
   const user = await requireAppUser();
-  if (!hasRole(user.role, "INSTRUCTOR")) {
+  if (!canAuthorCourses(user)) {
     throw new Error("Instructor or admin role required.");
   }
   const templateId = String(formData.get("templateId") ?? "");
@@ -588,8 +535,8 @@ async function enableCourseTemplateAction(formData: FormData) {
       },
     },
   });
-  if (!membership && user.role !== "ADMIN") {
-    throw new Error("Organisation membership is required.");
+  if ((!membership || membership.role === "MEMBER") && user.role !== "ADMIN") {
+    throw new Error("An organisation authoring role is required.");
   }
 
   await instantiateDefaultCourseTemplate({
@@ -610,6 +557,7 @@ export async function issueCertificateAction(courseId: string) {
 
   const user = await requireAppUser();
   const certificate = await issueCertificate(user.id, courseId);
+  revalidateLearningPaths(courseId);
   redirect(`/certificates/${certificate.certificateNumber}`);
 }
 
@@ -631,6 +579,7 @@ export async function issueCertificateFormAction(
     return actionError(error);
   }
 
+  revalidateLearningPaths(courseId);
   redirect(`/certificates/${certificateNumber}`);
 }
 
@@ -1189,9 +1138,11 @@ export async function createAssessmentAction(
     requiredForCompletion: formData.get("requiredForCompletion") === "on",
     maxAttempts: formData.get("maxAttempts") ?? "",
     timeLimitMinutes: formData.get("timeLimitMinutes") ?? "",
+    closesAt: formData.get("closesAt") ?? "",
     feedbackMode: formData.get("feedbackMode") ?? "IMMEDIATE",
   });
   const options = parseQuizOptions(parsed.options);
+  assertSupportedAssessmentSettings(parsed);
   if (parsed.correctIndex >= options.length) {
     throw new Error("Correct answer must match one of the provided options.");
   }
@@ -1205,6 +1156,7 @@ export async function createAssessmentAction(
       requiredForCompletion: parsed.requiredForCompletion,
       maxAttempts:
         typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : null,
+      closesAt: parsed.closesAt ? new Date(parsed.closesAt) : null,
       timeLimitMinutes:
         typeof parsed.timeLimitMinutes === "number"
           ? parsed.timeLimitMinutes
@@ -1251,8 +1203,10 @@ export async function updateAssessmentAction(
     requiredForCompletion: formData.get("requiredForCompletion") === "on",
     maxAttempts: formData.get("maxAttempts") ?? "",
     timeLimitMinutes: formData.get("timeLimitMinutes") ?? "",
+    closesAt: formData.get("closesAt") ?? "",
     feedbackMode: formData.get("feedbackMode") ?? "IMMEDIATE",
   });
+  assertSupportedAssessmentSettings(parsed);
 
   await prisma.assessment.update({
     where: { id: assessmentId },
@@ -1263,6 +1217,7 @@ export async function updateAssessmentAction(
       requiredForCompletion: parsed.requiredForCompletion,
       maxAttempts:
         typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : null,
+      closesAt: parsed.closesAt ? new Date(parsed.closesAt) : null,
       timeLimitMinutes:
         typeof parsed.timeLimitMinutes === "number"
           ? parsed.timeLimitMinutes
@@ -1421,21 +1376,45 @@ export async function enrollCourseLearnerAction(
   assertDatabaseConfigured();
 
   const user = await requireAppUser();
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
-  if (!canManageCourse(user, course)) {
-    throw new Error("You do not have permission to manage this course.");
-  }
-
   const userId = String(formData.get("userId") ?? "");
   if (!userId) throw new Error("Choose a learner to enroll.");
-
-  const learner = await prisma.user.findUnique({ where: { id: userId } });
-  if (!learner) throw new Error("Learner not found.");
-
-  await prisma.enrollment.upsert({
-    where: { userId_courseId: { userId, courseId } },
-    create: { userId, courseId, status: "ACTIVE" },
-    update: { status: "ACTIVE" },
+  await learningTransaction(async (tx) => {
+    const course = await tx.course.findUnique({ where: { id: courseId } });
+    if (!course || !canManageCourse(user, course))
+      throw new Error("You do not have permission to manage this course.");
+    const learner = await tx.user.findFirst({
+      where: {
+        id: userId,
+        ...(course.organizationId
+          ? {
+              organizationMemberships: {
+                some: { organizationId: course.organizationId },
+              },
+            }
+          : user.role === "ADMIN"
+            ? {}
+            : { enrollments: { some: { courseId } } }),
+      },
+    });
+    if (!learner)
+      throw new Error(
+        "Learner is not eligible for this course. Choose an organization member or an existing learner.",
+      );
+    const current = await tx.enrollment.findUnique({
+      where: { userId_courseId: { userId, courseId } },
+    });
+    if (current?.status === "ACTIVE" || current?.status === "COMPLETED") return;
+    const enrollment = await tx.enrollment.upsert({
+      where: { userId_courseId: { userId, courseId } },
+      create: { userId, courseId, status: "ACTIVE" },
+      update: { status: "ACTIVE" },
+    });
+    await recordCourseEvent(tx, {
+      userId,
+      courseId,
+      type: "user.enrolled",
+      idempotencyKey: `managed-enrollment:${enrollment.id}:${enrollment.updatedAt.toISOString()}`,
+    });
   });
 
   revalidatePath(`/dashboard/courses/${courseId}/students`);
@@ -1504,50 +1483,143 @@ export async function cancelCourseEnrollmentAction(
   revalidatePath("/dashboard/my-courses");
 }
 
+async function authorizedAssessment(
+  database: Parameters<Parameters<typeof learningTransaction>[0]>[0],
+  user: Awaited<ReturnType<typeof requireAppUser>>,
+  courseId: string,
+  assessmentId: string,
+) {
+  const assessment = await database.assessment.findUnique({
+    where: { id: assessmentId },
+    include: { questions: true, course: true },
+  });
+  if (!assessment || assessment.courseId !== courseId)
+    throw new Error("Assessment not found.");
+  const enrollment = await database.enrollment.findUnique({
+    where: { userId_courseId: { userId: user.id, courseId } },
+  });
+  if (
+    !canManageCourse(user, assessment.course) &&
+    !hasLearningAccess(enrollment)
+  )
+    throw new Error("You must be enrolled to submit this assessment.");
+  assertSupportedAssessmentSettings(assessment);
+  return assessment;
+}
+
+export async function startAssessmentAction(
+  courseId: string,
+  assessmentId: string,
+) {
+  assertDatabaseConfigured();
+  const user = await requireAppUser();
+  const attempt = await assessmentTransaction(async (database) => {
+    const assessment = await authorizedAssessment(
+      database,
+      user,
+      courseId,
+      assessmentId,
+    );
+    if (!assessment.questions.length)
+      throw new Error("This assessment has no questions yet.");
+    return startOrResumeAssessmentAttempt(database, assessment, user.id);
+  });
+  revalidatePath(`/dashboard/learn/${courseId}/assessments/${assessmentId}`);
+  return { id: attempt.id };
+}
+
+export async function startAssessmentFormAction(
+  courseId: string,
+  assessmentId: string,
+  _previousState: ActionFormState,
+  _formData: FormData,
+) {
+  void _previousState;
+  void _formData;
+  return runAction(async () => {
+    await startAssessmentAction(courseId, assessmentId);
+  }, "Assessment started. Your attempt is saved; you can resume from this page.");
+}
+
 export async function submitAssessmentAction(
   courseId: string,
   assessmentId: string,
   formData: FormData,
 ) {
   assertDatabaseConfigured();
-
   const user = await requireAppUser();
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId },
-    include: { questions: true },
-  });
-  if (!assessment || assessment.courseId !== courseId) {
-    throw new Error("Assessment not found.");
-  }
-  const previousAttempts = await prisma.assessmentSubmission.count({
-    where: { assessmentId, userId: user.id },
-  });
-  if (assessment.maxAttempts && previousAttempts >= assessment.maxAttempts) {
-    throw new Error("You have used all attempts for this assessment.");
-  }
-
-  const answers = Object.fromEntries(
-    assessment.questions.map((question) => [
-      question.id,
-      Number(formData.get(`question-${question.id}`)),
-    ]),
-  );
-  const score = scoreQuiz(assessment.questions, answers);
-  const passed = score >= assessment.passingScore;
-
-  await prisma.assessmentSubmission.create({
-    data: {
+  await assessmentTransaction(async (database) => {
+    const assessment = await authorizedAssessment(
+      database,
+      user,
+      courseId,
       assessmentId,
-      userId: user.id,
-      attemptNumber: previousAttempts + 1,
-      answers,
-      score,
-      passed,
-    },
+    );
+    const attemptId = formData.get("attemptId");
+    if (
+      assessment.timeLimitMinutes &&
+      (typeof attemptId !== "string" || !attemptId)
+    )
+      throw new Error("Start this assessment before submitting.");
+    const attempt =
+      typeof attemptId === "string" && attemptId
+        ? await database.assessmentAttempt.findFirst({
+            where: { id: attemptId, assessmentId, userId: user.id },
+          })
+        : await startOrResumeAssessmentAttempt(database, assessment, user.id);
+    if (!attempt) throw new Error("Assessment attempt not found.");
+    if (attempt.submittedAt) return; // A retry returns the existing result without spending another attempt.
+    const now = new Date();
+    const expired = !!(
+      (attempt.deadlineAt && attempt.deadlineAt <= now) ||
+      (assessment.closesAt && assessment.closesAt <= now)
+    );
+    const answers = expired
+      ? {}
+      : parseAssessmentAnswers(
+          assessment.questions,
+          formData,
+          typeof attemptId === "string" && !!attemptId,
+        );
+    const score = expired ? 0 : scoreQuiz(assessment.questions, answers);
+    const passed = !expired && score >= assessment.passingScore;
+    const submission = await database.assessmentSubmission.create({
+      data: {
+        assessmentId,
+        userId: user.id,
+        attemptId: attempt.id,
+        attemptNumber: attempt.attemptNumber,
+        answers,
+        score,
+        passed,
+        feedback: expired ? "The attempt expired before submission." : null,
+      },
+    });
+    await database.assessmentAttempt.update({
+      where: { id: attempt.id },
+      data: { submittedAt: now },
+    });
+    await recordLearningEvent(
+      {
+        organizationId: assessment.course?.organizationId,
+        userId: user.id,
+        courseId,
+        type: passed ? "assessment.passed" : "assessment.failed",
+        idempotencyKey: `assessment-submission:${submission.id}`,
+        payload: {
+          email: user.email,
+          userName: user.name,
+          courseTitle: assessment.course?.title,
+          assessmentId,
+          submissionId: submission.id,
+        },
+      },
+      database,
+    );
+    await reconcileLearningCompletion(database, user.id, courseId);
   });
-
   revalidatePath(`/dashboard/learn/${courseId}/assessments/${assessmentId}`);
-  revalidatePath(`/dashboard/learn/${courseId}`);
+  revalidateLearningPaths(courseId);
 }
 
 export async function updateProfileAction(formData: FormData) {
@@ -1576,43 +1648,88 @@ export async function markLessonCompleteAction(
   assertDatabaseConfigured();
 
   const user = await requireAppUser();
-  const lesson = await prisma.lesson.findUnique({
-    where: { id: lessonId },
-    include: { section: { include: { course: true } } },
-  });
-  if (!lesson) throw new Error("Lesson not found.");
+  const courseId = await learningTransaction(async (database) => {
+    const lesson = await database.lesson.findUnique({
+      where: { id: lessonId },
+      include: { section: { include: { course: true } } },
+    });
+    if (!lesson) throw new Error("Lesson not found.");
 
-  const canManage = canManageCourse(user, lesson.section.course);
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      userId_courseId: {
+    const canManage = canManageCourse(user, lesson.section.course);
+    const enrollment = await database.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId: user.id,
+          courseId: lesson.section.courseId,
+        },
+      },
+    });
+
+    if (!canManage && !hasLearningAccess(enrollment)) {
+      throw new Error("You must be enrolled to complete this lesson.");
+    }
+
+    const pendingScorm = await database.externalPackage.count({
+      where: {
+        lessonId,
+        type: "SCORM_12",
+        status: "READY",
+        attempts: {
+          none: {
+            userId: user.id,
+            completionStatus: { in: ["passed", "completed"] },
+          },
+        },
+      },
+    });
+    if (pendingScorm)
+      throw new Error(
+        "Complete the lesson's SCORM packages in the player first.",
+      );
+    await database.lessonProgress.upsert({
+      where: { userId_lessonId: { userId: user.id, lessonId } },
+      create: {
+        userId: user.id,
+        lessonId,
+        completedAt: new Date(),
+      },
+      update: {
+        lastSeenAt: new Date(),
+      },
+    });
+    // Preserve the original completion date when a learner revisits a lesson.
+    await database.lessonProgress.updateMany({
+      where: { userId: user.id, lessonId, completedAt: null },
+      data: { completedAt: new Date() },
+    });
+    if (hasLearningAccess(enrollment))
+      await recordCourseEvent(database, {
         userId: user.id,
         courseId: lesson.section.courseId,
-      },
-    },
+        type: "lesson.completed",
+        idempotencyKey: `lesson-completed:${user.id}:${lessonId}`,
+        payload: { lessonId },
+      });
+    await reconcileLearningCompletion(
+      database,
+      user.id,
+      lesson.section.courseId,
+    );
+    return lesson.section.courseId;
   });
 
-  if (!canManage && !enrollment) {
-    throw new Error("You must be enrolled to complete this lesson.");
-  }
+  revalidateLearningPaths(courseId);
+  revalidatePath(`/dashboard/learn/${courseId}/lessons/${lessonId}`);
+}
 
-  await prisma.lessonProgress.upsert({
-    where: { userId_lessonId: { userId: user.id, lessonId } },
-    create: {
-      userId: user.id,
-      lessonId,
-      completedAt: new Date(),
-    },
-    update: {
-      completedAt: new Date(),
-      lastSeenAt: new Date(),
-    },
-  });
-
-  revalidatePath(`/dashboard/learn/${lesson.section.courseId}`);
-  revalidatePath(
-    `/dashboard/learn/${lesson.section.courseId}/lessons/${lessonId}`,
-  );
+function revalidateLearningPaths(courseId: string) {
+  revalidatePath(`/dashboard/learn/${courseId}`);
+  revalidatePath(`/dashboard/learn/${courseId}/certificate`);
+  revalidatePath("/dashboard/my-courses");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/analytics");
+  revalidatePath(`/dashboard/courses/${courseId}/students`);
+  revalidatePath(`/dashboard/courses/${courseId}/insights`);
 }
 
 function assertDatabaseConfigured() {

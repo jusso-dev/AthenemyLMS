@@ -1,3 +1,4 @@
+vi.mock("@/lib/learning-events", () => ({ recordCourseEvent: vi.fn() }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createCertificateNumber,
@@ -8,8 +9,13 @@ import { generateCertificatePdf } from "@/lib/certificate-pdf";
 
 const mocks = vi.hoisted(() => ({
   prisma: {
+    $transaction: vi.fn(),
+    externalPackage: { findMany: vi.fn(), count: vi.fn() },
+    lesson: { count: vi.fn() },
+    lessonProgress: { count: vi.fn() },
     enrollment: {
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     certificate: {
       findUnique: vi.fn(),
@@ -29,6 +35,13 @@ vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
 describe("certificates", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.prisma.externalPackage.findMany.mockResolvedValue([]);
+    mocks.prisma.externalPackage.count.mockResolvedValue(0);
+    mocks.prisma.$transaction.mockImplementation((operation) =>
+      operation(mocks.prisma),
+    );
+    mocks.prisma.lesson.count.mockResolvedValue(2);
+    mocks.prisma.lessonProgress.count.mockResolvedValue(2);
     mocks.prisma.assessment.findMany.mockResolvedValue([]);
     mocks.prisma.assessmentSubmission.findMany.mockResolvedValue([]);
   });
@@ -65,6 +78,7 @@ describe("certificates", () => {
   });
 
   it("rejects incomplete enrollments", async () => {
+    mocks.prisma.lessonProgress.count.mockResolvedValue(1);
     mocks.prisma.enrollment.findUnique.mockResolvedValue({
       status: "ACTIVE",
       course: { certificatesEnabled: true },
@@ -89,6 +103,40 @@ describe("certificates", () => {
       "Required assessments",
     );
     expect(mocks.prisma.certificate.upsert).not.toHaveBeenCalled();
+  });
+
+  it("reconciles previously completed work before issuing a certificate", async () => {
+    mocks.prisma.enrollment.findUnique.mockResolvedValue({
+      status: "ACTIVE",
+      course: { certificatesEnabled: true },
+    });
+    await issueCertificate("user_1", "course_1");
+    expect(mocks.prisma.enrollment.update).toHaveBeenCalledWith({
+      where: { userId_courseId: { userId: "user_1", courseId: "course_1" } },
+      data: { status: "COMPLETED" },
+    });
+  });
+
+  it("rejects revoked enrollments even when all work is complete", async () => {
+    mocks.prisma.enrollment.findUnique.mockResolvedValue({
+      status: "CANCELLED",
+      course: { certificatesEnabled: true },
+    });
+    await expect(issueCertificate("user_1", "course_1")).rejects.toThrow(
+      "completed",
+    );
+    expect(mocks.prisma.certificate.upsert).not.toHaveBeenCalled();
+  });
+
+  it("does not trust a stale completed status after lessons are added", async () => {
+    mocks.prisma.enrollment.findUnique.mockResolvedValue({
+      status: "COMPLETED",
+      course: { certificatesEnabled: true },
+    });
+    mocks.prisma.lessonProgress.count.mockResolvedValue(1);
+    await expect(issueCertificate("user_1", "course_1")).rejects.toThrow(
+      "All course lessons",
+    );
   });
 
   it("selects only public verification fields", async () => {

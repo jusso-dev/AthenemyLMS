@@ -19,6 +19,14 @@ export function actionError(error: unknown): ActionFormState {
 }
 
 export function formatActionError(error: unknown) {
+  if (
+    error instanceof Error &&
+    /^PrismaClient(KnownRequest|UnknownRequest|Initialization|Validation|RustPanic)Error$/.test(
+      error.name,
+    )
+  ) {
+    return "Your changes could not be saved. Please try again.";
+  }
   if (error instanceof ZodError) {
     return error.issues[0]?.message ?? "Check the details and try again.";
   }

@@ -1,172 +1,173 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { sendEnrollmentEmail } from "@/lib/email";
-import { triggerDevConfigured } from "@/lib/automations/events";
+import {
+  sendEnrollmentEmail,
+  sendCourseCompletionEmail,
+  sendCertificateIssuedEmail,
+  sendInactivityNudgeEmail,
+} from "@/lib/email";
 
-export type AutomationExecutionMode = "inline" | "trigger.dev";
-
-export function automationExecutionMode(): AutomationExecutionMode {
-  return triggerDevConfigured() ? "trigger.dev" : "inline";
+export const MAX_ATTEMPTS = 5;
+export const LEASE_MS = 60_000;
+export function retryAt(attempt: number, now = new Date()) {
+  return new Date(
+    now.getTime() + Math.min(3_600_000, 30_000 * 2 ** Math.max(0, attempt - 1)),
+  );
 }
-
+export function automationExecutionMode() {
+  return "database-worker" as const;
+}
 export type AutomationRunOutcome = {
-  status: "SUCCEEDED" | "FAILED" | "SKIPPED";
+  status: "SUCCEEDED" | "FAILED" | "SKIPPED" | "PENDING" | "RUNNING";
   error?: string;
 };
 
-/**
- * Boundary for dispatching an automation run. The current implementation always
- * processes inline so a self-hoster can ship without Trigger.dev. When the
- * Trigger.dev SDK is wired in (Phase 2 of #37), this is the seam that flips
- * dispatch to `tasks.processAutomationRun.trigger({ runId })`.
- */
+// Dispatch is deliberately enqueue-only. The separately supervised worker owns delivery.
 export async function dispatchAutomationRun(
   runId: string,
 ): Promise<AutomationRunOutcome> {
-  return processAutomationRun(runId);
+  const run = await prisma.automationRun.findUnique({
+    where: { id: runId },
+    select: { status: true },
+  });
+  return run
+    ? { status: run.status }
+    : { status: "FAILED", error: "Automation run not found." };
+}
+
+export function automationDue(now: Date): Prisma.AutomationRunWhereInput {
+  return {
+    attempts: { lt: MAX_ATTEMPTS },
+    OR: [
+      {
+        status: "PENDING",
+        OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }],
+      },
+      { status: "RUNNING", leaseExpiresAt: { lte: now } },
+    ],
+  };
 }
 
 export async function processAutomationRun(
   runId: string,
 ): Promise<AutomationRunOutcome> {
-  const run = await prisma.automationRun.findUnique({
-    where: { id: runId },
-    include: {
-      rule: true,
-      learningEvent: true,
+  const now = new Date();
+  const leaseToken = crypto.randomUUID();
+  const claimed = await prisma.automationRun.updateMany({
+    where: { id: runId, ...automationDue(now) },
+    data: {
+      status: "RUNNING",
+      leaseToken,
+      leaseExpiresAt: new Date(now.getTime() + LEASE_MS),
+      attempts: { increment: 1 },
     },
   });
-  if (!run) return { status: "FAILED", error: "Automation run not found." };
-  if (run.status === "SUCCEEDED" || run.status === "SKIPPED") {
-    return { status: run.status };
-  }
-
-  await prisma.automationRun.update({
+  if (!claimed.count) return dispatchAutomationRun(runId);
+  const run = await prisma.automationRun.findUniqueOrThrow({
     where: { id: runId },
-    data: { status: "RUNNING" },
+    include: { rule: true, learningEvent: true },
   });
-
+  let outcome: AutomationRunOutcome;
   try {
-    const outcome = await executeRunAction(run);
-    await prisma.automationRun.update({
-      where: { id: runId },
-      data: {
-        status: outcome.status,
-        error: outcome.error ?? null,
-        metadata: {
-          ...((run.metadata as Prisma.JsonObject | null) ?? {}),
-          executionMode: automationExecutionMode(),
-          completedAt: new Date().toISOString(),
-        },
+    outcome = await executeRunAction(run, leaseToken);
+  } catch {
+    // Provider responses can include credentials or recipient data. Persist only a fixed diagnostic.
+    outcome = {
+      status: "FAILED",
+      error:
+        "Email provider delivery failed. Check provider configuration and availability.",
+    };
+    await prisma.notificationDelivery.updateMany({
+      where: {
+        automationRunId: run.id,
+        status: "PENDING",
+        automationRun: { leaseToken },
       },
+      data: { status: "FAILED", error: outcome.error },
     });
-    return outcome;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await prisma.automationRun.update({
-      where: { id: runId },
-      data: { status: "FAILED", error: message },
-    });
-    return { status: "FAILED", error: message };
   }
+  const retry = outcome.status === "FAILED" && run.attempts < MAX_ATTEMPTS;
+  await prisma.automationRun.updateMany({
+    where: { id: run.id, leaseToken },
+    data: {
+      status: retry ? "PENDING" : outcome.status,
+      error: outcome.error ?? null,
+      nextRetryAt: retry ? retryAt(run.attempts) : null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+    },
+  });
+  return retry ? { ...outcome, status: "PENDING" } : outcome;
 }
 
+const handlers = {
+  "email.enrollment_welcome": sendEnrollmentEmail,
+  "email.course_completion": sendCourseCompletionEmail,
+  "email.certificate_issued": sendCertificateIssuedEmail,
+  "email.inactivity_nudge": sendInactivityNudgeEmail,
+};
 async function executeRunAction(
   run: Prisma.AutomationRunGetPayload<{
     include: { rule: true; learningEvent: true };
   }>,
+  leaseToken: string,
 ): Promise<AutomationRunOutcome> {
-  if (!run.rule) {
-    return { status: "SKIPPED", error: "Rule was deleted before execution." };
-  }
-
-  const payload =
-    (run.learningEvent?.payload as Prisma.JsonObject | null) ?? {};
-
-  switch (run.rule.actionType) {
-    case "email.enrollment_welcome":
-      return runEnrollmentWelcome(run, payload);
-    case "email.course_completion":
-    case "email.certificate_issued":
-    case "email.inactivity_nudge":
-      // Templates land with their delivery code in Phase 2 — they still get a
-      // recorded delivery so admins can see what would have been sent.
-      return runDeferredEmail(run, payload);
-    default:
-      return {
-        status: "SKIPPED",
-        error: `Unsupported action type: ${run.rule.actionType}`,
-      };
-  }
-}
-
-async function runEnrollmentWelcome(
-  run: Prisma.AutomationRunGetPayload<{
-    include: { rule: true; learningEvent: true };
-  }>,
-  payload: Prisma.JsonObject,
-): Promise<AutomationRunOutcome> {
-  const recipient = typeof payload.email === "string" ? payload.email : null;
-  const courseTitle =
-    typeof payload.courseTitle === "string" ? payload.courseTitle : undefined;
-
-  const delivery = await prisma.notificationDelivery.create({
-    data: {
+  if (!run.rule || !run.rule.enabled)
+    return { status: "SKIPPED", error: "Rule is disabled or deleted." };
+  const handler = handlers[run.rule.actionType as keyof typeof handlers];
+  if (!handler) return { status: "SKIPPED", error: "Unsupported action type." };
+  const payload = (run.learningEvent?.payload ?? {}) as Prisma.JsonObject;
+  const recipient =
+    typeof payload.email === "string" &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)
+      ? payload.email
+      : null;
+  const idempotencyKey = `automation:${run.id}`;
+  const delivery = await prisma.notificationDelivery.upsert({
+    where: { idempotencyKey },
+    update: {},
+    create: {
       organizationId: run.organizationId,
       automationRunId: run.id,
+      idempotencyKey,
       channel: "email",
       recipient: recipient ?? "(unknown)",
-      template: "enrollment_welcome",
+      template: run.rule.actionType,
       status: recipient ? "PENDING" : "SKIPPED",
-      metadata: { courseTitle: courseTitle ?? null },
     },
   });
-
-  if (!recipient) {
+  if (delivery.status === "SENT") return { status: "SUCCEEDED" };
+  if (!recipient)
     return {
       status: "SKIPPED",
-      error: "Learning event payload missing recipient email.",
+      error: "Learning event is missing a valid recipient email.",
     };
-  }
-
-  try {
-    await sendEnrollmentEmail({
-      to: recipient,
-      name: typeof payload.userName === "string" ? payload.userName : undefined,
-      courseTitle,
-    });
-    await prisma.notificationDelivery.update({
-      where: { id: delivery.id },
-      data: { status: "SENT", sentAt: new Date() },
-    });
-    return { status: "SUCCEEDED" };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await prisma.notificationDelivery.update({
-      where: { id: delivery.id },
-      data: { status: "FAILED", error: message },
-    });
-    return { status: "FAILED", error: message };
-  }
-}
-
-async function runDeferredEmail(
-  run: Prisma.AutomationRunGetPayload<{
-    include: { rule: true; learningEvent: true };
-  }>,
-  payload: Prisma.JsonObject,
-): Promise<AutomationRunOutcome> {
-  const recipient = typeof payload.email === "string" ? payload.email : "(unknown)";
-  await prisma.notificationDelivery.create({
+  const pending = await prisma.notificationDelivery.updateMany({
+    where: { id: delivery.id, automationRun: { leaseToken } },
+    data: { status: "PENDING", error: null },
+  });
+  if (!pending.count) return { status: "RUNNING" };
+  const result = await handler({
+    to: recipient,
+    name: typeof payload.userName === "string" ? payload.userName : undefined,
+    courseTitle:
+      typeof payload.courseTitle === "string" ? payload.courseTitle : undefined,
+    idempotencyKey,
+  });
+  const sent = result.provider !== "stub" && result.accepted;
+  const error = sent
+    ? null
+    : "Email was not sent: a delivery provider is not active.";
+  await prisma.notificationDelivery.updateMany({
+    where: { id: delivery.id, automationRun: { leaseToken } },
     data: {
-      organizationId: run.organizationId,
-      automationRunId: run.id,
-      channel: "email",
-      recipient,
-      template: run.rule?.actionType ?? "deferred",
-      status: "PENDING",
-      metadata: { reason: "Template handler ships in Phase 2 of #37." },
+      status: sent ? "SENT" : "SKIPPED",
+      sentAt: sent ? new Date() : null,
+      error,
     },
   });
-  return { status: "SKIPPED", error: "Template handler not yet implemented." };
+  return {
+    status: sent ? "SUCCEEDED" : "SKIPPED",
+    ...(error ? { error } : {}),
+  };
 }

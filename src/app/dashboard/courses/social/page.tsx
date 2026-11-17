@@ -6,28 +6,58 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { databaseIsConfigured, fallbackNotice } from "@/lib/dashboard-data";
 import { SetupMessage } from "@/lib/setup-message";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
+import {
+  authorableOrganizationIds,
+  managedOrganizationIds,
+} from "@/lib/permissions";
 
 export default async function SocialLearningPage() {
   const hasDatabase = databaseIsConfigured();
   const user = await getCurrentAppUser();
-  const courseWhere =
+  const courseWhere: Prisma.CourseWhereInput =
     user?.role === "ADMIN"
       ? {}
-      : user?.role === "INSTRUCTOR"
-        ? { instructorId: user.id }
-        : { enrollments: { some: { userId: user?.id } } };
+      : user
+        ? {
+            OR: [
+              { organizationId: { in: managedOrganizationIds(user) } },
+              {
+                instructorId: user.id,
+                OR: [
+                  { organizationId: null },
+                  { organizationId: { in: authorableOrganizationIds(user) } },
+                ],
+              },
+              {
+                enrollments: {
+                  some: {
+                    userId: user.id,
+                    status: { in: ["ACTIVE", "COMPLETED"] },
+                  },
+                },
+              },
+            ],
+          }
+        : { id: { in: [] } };
   const [cohorts, threads, sessions] =
     hasDatabase && user
       ? await Promise.all([
           prisma.cohort.findMany({
             where: { course: courseWhere },
-            include: { course: { select: { title: true } }, memberships: true },
+            include: {
+              course: { select: { title: true } },
+              _count: { select: { memberships: true } },
+            },
             orderBy: { updatedAt: "desc" },
             take: 10,
           }),
           prisma.discussionThread.findMany({
             where: { course: courseWhere },
-            include: { course: { select: { title: true } }, posts: true },
+            include: {
+              course: { select: { title: true } },
+              _count: { select: { posts: true } },
+            },
             orderBy: { updatedAt: "desc" },
             take: 10,
           }),
@@ -93,7 +123,7 @@ export default async function SocialLearningPage() {
                 <div>
                   <p className="font-medium">{cohort.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {cohort.course.title} · {cohort.memberships.length} learners
+                    {cohort.course.title} · {cohort._count.memberships} learners
                   </p>
                 </div>
                 <Badge
@@ -115,7 +145,7 @@ export default async function SocialLearningPage() {
             <div key={thread.id} className="rounded-md border p-4">
               <p className="font-medium">{thread.title}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {thread.course.title} · {thread.posts.length} posts
+                {thread.course.title} · {thread._count.posts} posts
               </p>
             </div>
           ))}

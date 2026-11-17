@@ -1,233 +1,177 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  builtInAutomationRecipes,
-  evaluateAutomationRules,
-  recordLearningEvent,
-} from "@/lib/automations/events";
-import { processAutomationRun } from "@/lib/automations/dispatcher";
-
 const mocks = vi.hoisted(() => ({
   prisma: {
     learningEvent: { upsert: vi.fn() },
     automationRule: { findMany: vi.fn() },
     automationRun: {
-      create: vi.fn(),
       createMany: vi.fn(),
+      findMany: vi.fn(),
       findUnique: vi.fn(),
-      update: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      updateMany: vi.fn(),
     },
     notificationDelivery: {
-      create: vi.fn(),
+      upsert: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
-    $transaction: vi.fn(),
   },
-  email: {
-    sendEnrollmentEmail: vi.fn(),
-  },
+  send: vi.fn(),
 }));
-
 vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
 vi.mock("@/lib/email", () => ({
-  sendEnrollmentEmail: mocks.email.sendEnrollmentEmail,
+  sendEnrollmentEmail: mocks.send,
+  sendCourseCompletionEmail: mocks.send,
+  sendCertificateIssuedEmail: mocks.send,
+  sendInactivityNudgeEmail: mocks.send,
 }));
+import {
+  builtInAutomationRecipes,
+  evaluateAutomationRules,
+  recordLearningEvent,
+} from "@/lib/automations/events";
+import {
+  automationExecutionMode,
+  processAutomationRun,
+  retryAt,
+} from "@/lib/automations/dispatcher";
 
-describe("automations", () => {
+function run(actionType = "email.enrollment_welcome", attempts = 1) {
+  return {
+    id: "run_1",
+    organizationId: "org_1",
+    attempts,
+    rule: { actionType, enabled: true },
+    learningEvent: {
+      payload: { email: "learner@example.com", courseTitle: "Security" },
+    },
+  };
+}
+describe("durable automations", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.prisma.learningEvent.upsert.mockResolvedValue({
-      id: "event_1",
+    vi.resetAllMocks();
+    mocks.prisma.automationRun.updateMany.mockResolvedValue({ count: 1 });
+    mocks.prisma.automationRun.findUniqueOrThrow.mockResolvedValue(run());
+    mocks.prisma.notificationDelivery.upsert.mockResolvedValue({
+      id: "delivery_1",
+      status: "PENDING",
+    });
+    mocks.prisma.notificationDelivery.updateMany.mockResolvedValue({
+      count: 1,
+    });
+    mocks.send.mockResolvedValue({ provider: "resend", accepted: true });
+  });
+  it("records only a durable event without sending inside the request", async () => {
+    await recordLearningEvent({
       organizationId: "org_1",
       type: "user.enrolled",
+      idempotencyKey: "enroll_1",
     });
+    expect(mocks.prisma.learningEvent.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId_idempotencyKey: {
+            organizationId: "org_1",
+            idempotencyKey: "enroll_1",
+          },
+        },
+      }),
+    );
+    expect(mocks.prisma.automationRun.createMany).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("deduplicates rule/event fanout", async () => {
     mocks.prisma.automationRule.findMany.mockResolvedValue([
       { id: "rule_1", actionType: "email.enrollment_welcome" },
     ]);
-    mocks.prisma.automationRun.create.mockResolvedValue({ id: "run_1" });
-    mocks.prisma.$transaction.mockImplementation(async (operations: unknown) =>
-      Array.isArray(operations) ? Promise.all(operations) : operations,
-    );
-    mocks.prisma.automationRun.update.mockResolvedValue({});
-    mocks.prisma.notificationDelivery.create.mockResolvedValue({ id: "delivery_1" });
-    mocks.prisma.notificationDelivery.update.mockResolvedValue({});
-    mocks.email.sendEnrollmentEmail.mockResolvedValue({
-      provider: "stub",
-      event: "enrollment",
-      accepted: true,
-    });
-  });
-
-  it("ships lifecycle recipe defaults", () => {
+    mocks.prisma.automationRun.findMany.mockResolvedValue([{ id: "run_1" }]);
     expect(
-      builtInAutomationRecipes.map((recipe) => recipe.eventType),
-    ).toContain("certificate.issued");
+      await evaluateAutomationRules("org_1", "event_1", "user.enrolled"),
+    ).toEqual({ count: 1, runIds: ["run_1"] });
+    expect(mocks.prisma.automationRun.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
+    );
   });
-
-  it("records idempotent learning events and dispatches matching rules", async () => {
-    mocks.prisma.automationRun.findUnique.mockResolvedValueOnce({
-      id: "run_1",
-      organizationId: "org_1",
-      status: "PENDING",
-      metadata: {},
-      rule: { actionType: "email.enrollment_welcome" },
-      learningEvent: {
-        payload: {
-          email: "learner@example.com",
-          courseTitle: "Security",
-        },
-      },
-    });
-
-    await recordLearningEvent({
-      organizationId: "org_1",
-      userId: "user_1",
-      courseId: "course_1",
-      type: "user.enrolled",
-      payload: { courseTitle: "Security", email: "learner@example.com" },
-      idempotencyKey: "enrollment:user_1:course_1",
-    });
-
-    expect(mocks.prisma.learningEvent.upsert).toHaveBeenCalledWith({
-      where: {
-        organizationId_idempotencyKey: {
-          organizationId: "org_1",
-          idempotencyKey: "enrollment:user_1:course_1",
-        },
-      },
-      update: {},
-      create: expect.objectContaining({
-        organizationId: "org_1",
-        type: "user.enrolled",
-      }),
-    });
-    expect(mocks.prisma.automationRun.create).toHaveBeenCalled();
-    expect(mocks.email.sendEnrollmentEmail).toHaveBeenCalledWith({
-      to: "learner@example.com",
-      name: undefined,
-      courseTitle: "Security",
-    });
-  });
-
-  it("returns run ids from evaluateAutomationRules", async () => {
+  it.each(builtInAutomationRecipes)(
+    "delivers $name with stable provider idempotency",
+    async (recipe) => {
+      mocks.prisma.automationRun.findUniqueOrThrow.mockResolvedValue(
+        run(recipe.actionType),
+      );
+      expect(await processAutomationRun("run_1")).toEqual({
+        status: "SUCCEEDED",
+      });
+      expect(mocks.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idempotencyKey: "automation:run_1",
+          to: "learner@example.com",
+        }),
+      );
+      expect(mocks.prisma.automationRun.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { id: "run_1", leaseToken: expect.any(String) },
+          data: expect.objectContaining({
+            status: "SUCCEEDED",
+            leaseToken: null,
+          }),
+        }),
+      );
+    },
+  );
+  it("does not deliver when another worker owns the claim", async () => {
+    mocks.prisma.automationRun.updateMany.mockResolvedValue({ count: 0 });
     mocks.prisma.automationRun.findUnique.mockResolvedValue({
-      id: "run_1",
-      organizationId: "org_1",
-      status: "SUCCEEDED",
-      metadata: {},
-      rule: { actionType: "email.enrollment_welcome" },
-      learningEvent: { payload: {} },
+      status: "RUNNING",
     });
-
-    const result = await evaluateAutomationRules(
-      "org_1",
-      "event_1",
-      "user.enrolled",
-    );
-    expect(result.count).toBe(1);
-    expect(result.runIds).toEqual(["run_1"]);
+    expect(await processAutomationRun("run_1")).toEqual({ status: "RUNNING" });
+    expect(mocks.send).not.toHaveBeenCalled();
   });
-
-  it("does not throw when dispatch fails inside recordLearningEvent", async () => {
-    mocks.prisma.automationRun.create.mockRejectedValueOnce(
-      new Error("db unavailable"),
-    );
-    const event = await recordLearningEvent({
-      organizationId: "org_1",
-      type: "user.enrolled",
-    });
-    expect(event).toEqual(
-      expect.objectContaining({ id: "event_1", organizationId: "org_1" }),
-    );
-  });
-
-  it("advances PENDING runs to SUCCEEDED for enrollment welcome", async () => {
-    mocks.prisma.automationRun.findUnique.mockResolvedValueOnce({
-      id: "run_1",
-      organizationId: "org_1",
+  it("retries failures with a bounded schedule and redacted diagnostic", async () => {
+    mocks.send.mockRejectedValue(new Error("private provider response"));
+    expect(await processAutomationRun("run_1")).toMatchObject({
       status: "PENDING",
-      metadata: {},
-      rule: { actionType: "email.enrollment_welcome" },
-      learningEvent: {
-        payload: { email: "learner@example.com", courseTitle: "Security" },
-      },
     });
-
-    const outcome = await processAutomationRun("run_1");
-
-    expect(outcome.status).toBe("SUCCEEDED");
-    expect(mocks.prisma.automationRun.update).toHaveBeenCalledWith({
-      where: { id: "run_1" },
-      data: { status: "RUNNING" },
-    });
-    expect(mocks.prisma.notificationDelivery.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        channel: "email",
-        recipient: "learner@example.com",
-        template: "enrollment_welcome",
-        status: "PENDING",
+    expect(mocks.prisma.automationRun.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          nextRetryAt: expect.any(Date),
+          error: expect.not.stringContaining("private"),
+        }),
       }),
-    });
-    expect(mocks.prisma.notificationDelivery.update).toHaveBeenCalledWith({
-      where: { id: "delivery_1" },
-      data: { status: "SENT", sentAt: expect.any(Date) },
-    });
-  });
-
-  it("skips runs that are already SUCCEEDED", async () => {
-    mocks.prisma.automationRun.findUnique.mockResolvedValueOnce({
-      id: "run_done",
-      status: "SUCCEEDED",
-      metadata: {},
-      rule: { actionType: "email.enrollment_welcome" },
-      learningEvent: { payload: {} },
-    });
-
-    const outcome = await processAutomationRun("run_done");
-    expect(outcome).toEqual({ status: "SUCCEEDED" });
-    expect(mocks.prisma.automationRun.update).not.toHaveBeenCalled();
-    expect(mocks.email.sendEnrollmentEmail).not.toHaveBeenCalled();
-  });
-
-  it("marks runs FAILED when the action raises", async () => {
-    mocks.prisma.automationRun.findUnique.mockResolvedValueOnce({
-      id: "run_fail",
-      organizationId: "org_1",
-      status: "PENDING",
-      metadata: {},
-      rule: { actionType: "email.enrollment_welcome" },
-      learningEvent: {
-        payload: { email: "learner@example.com" },
-      },
-    });
-    mocks.email.sendEnrollmentEmail.mockRejectedValueOnce(
-      new Error("smtp down"),
     );
-
-    const outcome = await processAutomationRun("run_fail");
-    expect(outcome).toEqual({ status: "FAILED", error: "smtp down" });
-    expect(mocks.prisma.notificationDelivery.update).toHaveBeenCalledWith({
-      where: { id: "delivery_1" },
-      data: { status: "FAILED", error: "smtp down" },
+    mocks.prisma.automationRun.findUniqueOrThrow.mockResolvedValue(
+      run(undefined, 5),
+    );
+    expect(await processAutomationRun("run_1")).toMatchObject({
+      status: "FAILED",
     });
   });
-
-  it("records a deferred delivery for recipes whose handler is Phase 2", async () => {
-    mocks.prisma.automationRun.findUnique.mockResolvedValueOnce({
-      id: "run_deferred",
-      organizationId: "org_1",
-      status: "PENDING",
-      metadata: {},
-      rule: { actionType: "email.certificate_issued" },
-      learningEvent: { payload: { email: "learner@example.com" } },
+  it("does not resend an already accepted notification after a crash", async () => {
+    mocks.prisma.notificationDelivery.upsert.mockResolvedValue({
+      id: "delivery_1",
+      status: "SENT",
     });
-
-    const outcome = await processAutomationRun("run_deferred");
-    expect(outcome.status).toBe("SKIPPED");
-    expect(mocks.prisma.notificationDelivery.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        template: "email.certificate_issued",
-        status: "PENDING",
+    expect(await processAutomationRun("run_1")).toEqual({
+      status: "SUCCEEDED",
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("records stub delivery honestly", async () => {
+    mocks.send.mockResolvedValue({ provider: "stub", accepted: true });
+    expect(await processAutomationRun("run_1")).toMatchObject({
+      status: "SKIPPED",
+    });
+    expect(
+      mocks.prisma.notificationDelivery.updateMany,
+    ).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "SKIPPED", sentAt: null }),
       }),
-    });
+    );
+  });
+  it("reports the actual worker and exponential retry delay", () => {
+    expect(automationExecutionMode()).toBe("database-worker");
+    expect(retryAt(1, new Date(0)).getTime()).toBe(30_000);
+    expect(retryAt(3, new Date(0)).getTime()).toBe(120_000);
   });
 });

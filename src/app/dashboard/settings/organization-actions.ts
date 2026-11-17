@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -151,52 +152,38 @@ export async function updateOrganizationMemberAction(formData: FormData) {
   const parsed = organizationMemberSchema.parse({
     organizationId: formData.get("organizationId"),
     membershipId: formData.get("membershipId"),
-    name: formData.get("name") ?? "",
-    appRole: formData.get("appRole"),
     orgRole: formData.get("orgRole"),
   });
-  const { actorMembership, targetMembership } = await requireManageableMember(
-    user,
-    parsed.organizationId,
-    parsed.membershipId,
+  await prisma.$transaction(
+    async (tx) => {
+      const { actorMembership, targetMembership } =
+        await requireManageableMember(
+          user,
+          parsed.organizationId,
+          parsed.membershipId,
+          tx,
+        );
+      if (
+        targetMembership.role === "OWNER" &&
+        parsed.orgRole !== "OWNER" &&
+        (await tx.organizationMembership.count({
+          where: { organizationId: parsed.organizationId, role: "OWNER" },
+        })) <= 1
+      ) {
+        throw new Error("Every organisation needs at least one owner.");
+      }
+      if (!canAssignOrgRole(user.role, actorMembership?.role, parsed.orgRole)) {
+        throw new Error(
+          "You do not have permission to assign that organisation role.",
+        );
+      }
+      await tx.organizationMembership.update({
+        where: { id: targetMembership.id },
+        data: { role: parsed.orgRole },
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
-
-  if (
-    targetMembership.role === "OWNER" &&
-    parsed.orgRole !== "OWNER" &&
-    (await ownerCount(parsed.organizationId)) <= 1
-  ) {
-    throw new Error("Every organisation needs at least one owner.");
-  }
-  if (!canAssignOrgRole(user.role, actorMembership?.role, parsed.orgRole)) {
-    throw new Error(
-      "You do not have permission to assign that organisation role.",
-    );
-  }
-
-  const name = parsed.name?.trim() || null;
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: targetMembership.userId },
-      data: {
-        name,
-        role: parsed.appRole,
-      },
-    }),
-    prisma.organizationMembership.update({
-      where: { id: targetMembership.id },
-      data: { role: parsed.orgRole },
-    }),
-  ]);
-
-  if (name) {
-    const [firstName, ...lastNameParts] = name.split(/\s+/);
-    const client = await clerkClient();
-    await client.users.updateUser(targetMembership.user.clerkId, {
-      firstName,
-      lastName: lastNameParts.join(" ") || undefined,
-    });
-  }
 
   revalidatePath("/dashboard/settings");
 }
@@ -214,6 +201,12 @@ export async function updateOrganizationMemberFormAction(
 export async function requirePasswordResetAction(formData: FormData) {
   assertDatabase();
   const user = await requireAppUser();
+  if (user.role !== "ADMIN") {
+    throw new Error(
+      "Platform administrator access is required to reset account credentials.",
+    );
+  }
+
   const parsed = organizationMemberIdSchema.parse({
     organizationId: formData.get("organizationId"),
     membershipId: formData.get("membershipId"),
@@ -249,27 +242,42 @@ export async function deleteOrganizationMemberAction(formData: FormData) {
     organizationId: formData.get("organizationId"),
     membershipId: formData.get("membershipId"),
   });
-  const { targetMembership } = await requireManageableMember(
-    user,
-    parsed.organizationId,
-    parsed.membershipId,
+  await prisma.$transaction(
+    async (tx) => {
+      const { targetMembership } = await requireManageableMember(
+        user,
+        parsed.organizationId,
+        parsed.membershipId,
+        tx,
+      );
+      if (targetMembership.userId === user.id) {
+        throw new Error(
+          "You cannot remove your own membership from organisation settings.",
+        );
+      }
+      if (
+        targetMembership.role === "OWNER" &&
+        (await tx.organizationMembership.count({
+          where: { organizationId: parsed.organizationId, role: "OWNER" },
+        })) <= 1
+      ) {
+        throw new Error("Every organisation needs at least one owner.");
+      }
+      // Preserve the identity and learning history shared with other organisations.
+      await tx.enrollment.updateMany({
+        where: {
+          userId: targetMembership.userId,
+          course: { organizationId: parsed.organizationId },
+          status: { not: "CANCELLED" },
+        },
+        data: { status: "CANCELLED" },
+      });
+      await tx.organizationMembership.delete({
+        where: { id: targetMembership.id },
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
-
-  if (targetMembership.userId === user.id) {
-    throw new Error(
-      "You cannot delete your own account from organisation settings.",
-    );
-  }
-  if (
-    targetMembership.role === "OWNER" &&
-    (await ownerCount(parsed.organizationId)) <= 1
-  ) {
-    throw new Error("Every organisation needs at least one owner.");
-  }
-
-  const client = await clerkClient();
-  await client.users.deleteUser(targetMembership.user.clerkId);
-  await prisma.user.delete({ where: { id: targetMembership.userId } });
 
   revalidatePath("/dashboard/settings");
 }
@@ -280,7 +288,7 @@ export async function deleteOrganizationMemberFormAction(
 ) {
   return runAction(
     () => deleteOrganizationMemberAction(formData),
-    "User deleted.",
+    "Member removed from this organisation.",
   );
 }
 
@@ -303,9 +311,10 @@ async function requireManageableMember(
   user: Awaited<ReturnType<typeof requireAppUser>>,
   organizationId: string,
   membershipId: string,
+  db: Prisma.TransactionClient = prisma,
 ) {
   const [actorMembership, targetMembership] = await Promise.all([
-    prisma.organizationMembership.findUnique({
+    db.organizationMembership.findUnique({
       where: {
         organizationId_userId: {
           organizationId,
@@ -313,7 +322,7 @@ async function requireManageableMember(
         },
       },
     }),
-    prisma.organizationMembership.findUnique({
+    db.organizationMembership.findUnique({
       where: { id: membershipId },
       include: { user: true },
     }),
@@ -352,12 +361,6 @@ function canAssignOrgRole(
   if (appRole === "ADMIN") return true;
   if (actorRole === "OWNER") return true;
   return actorRole === "ADMIN" && hasOrgRole("ADMIN", targetRole);
-}
-
-function ownerCount(organizationId: string) {
-  return prisma.organizationMembership.count({
-    where: { organizationId, role: "OWNER" },
-  });
 }
 
 function selectedStarterTemplates(formData: FormData) {

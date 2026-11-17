@@ -66,7 +66,7 @@ export default async function PortalCoursePage({
       theme={publishedTheme(organization.portal)}
       signedIn={Boolean(user)}
     >
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="border-b bg-card">
           <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
             <div>

@@ -2,7 +2,13 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
 import type { AppUser } from "@/lib/auth";
-import { canManageCourse, hasRole } from "@/lib/permissions";
+import {
+  authorableOrganizationIds,
+  canAuthorCourses,
+  canManageCourse,
+  managedOrganizationIds,
+} from "@/lib/permissions";
+import { hasLearningAccess } from "@/lib/learning";
 import { formatPrice } from "@/lib/utils";
 
 type DashboardMode = "database" | "fallback" | "permission";
@@ -65,82 +71,110 @@ export function fallbackNotice() {
 }
 
 export async function getDashboardOverview(user: AppUser | null) {
-  if (!databaseIsConfigured()) return emptyOverview();
+  if (!databaseIsConfigured() || !user) return emptyOverview();
 
-  try {
-    const courseScope = scopeCoursesToUser(user);
-    const startOfMonth = new Date();
-    startOfMonth.setUTCDate(1);
-    startOfMonth.setUTCHours(0, 0, 0, 0);
+  const courseScope = scopeCoursesToUser(user);
+  const learnerScope = canAuthorCourses(user) ? {} : { userId: user.id };
+  const startOfMonth = new Date();
+  startOfMonth.setUTCDate(1);
+  startOfMonth.setUTCHours(0, 0, 0, 0);
 
-    const [
-      activeEnrollments,
-      publishedCourses,
-      completedEnrollments,
-      revenue,
-      courses,
-    ] = await Promise.all([
-      prisma.enrollment.count({
-        where: { status: "ACTIVE", course: courseScope },
-      }),
-      prisma.course.count({
-        where: { status: "PUBLISHED", ...courseScope },
-      }),
-      prisma.enrollment.count({
-        where: { status: "COMPLETED", course: courseScope },
-      }),
-      prisma.payment.aggregate({
-        _sum: { amountCents: true },
+  const [
+    activeEnrollments,
+    publishedCourses,
+    completedEnrollments,
+    revenue,
+    courses,
+  ] = await Promise.all([
+    prisma.enrollment.count({
+      where: { status: "ACTIVE", course: courseScope, ...learnerScope },
+    }),
+    prisma.course.count({
+      where: { status: "PUBLISHED", ...courseScope },
+    }),
+    prisma.enrollment.count({
+      where: { status: "COMPLETED", course: courseScope, ...learnerScope },
+    }),
+    prisma.payment.aggregate({
+      _sum: { amountCents: true },
+      where: {
+        status: "PAID",
+        createdAt: { gte: startOfMonth },
+        course: courseScope,
+        ...learnerScope,
+      },
+    }),
+    prisma.course.findMany({
+      where: courseScope,
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        level: true,
+        status: true,
+        instructor: { select: { name: true, imageUrl: true } },
+        _count: {
+          select: {
+            enrollments: {
+              where: {
+                status: { in: ["ACTIVE", "COMPLETED"] },
+                ...learnerScope,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+  const completedByCourse = courses.length
+    ? await prisma.enrollment.groupBy({
+        by: ["courseId"],
         where: {
-          status: "PAID",
-          createdAt: { gte: startOfMonth },
-          course: courseScope,
+          courseId: { in: courses.map((course) => course.id) },
+          status: "COMPLETED",
+          ...learnerScope,
         },
-      }),
-      prisma.course.findMany({
-        where: courseScope,
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-        select: {
-          id: true,
-          title: true,
-          level: true,
-          status: true,
-          instructor: { select: { name: true, imageUrl: true } },
-          _count: { select: { enrollments: true } },
-        },
-      }),
-    ]);
+        _count: { _all: true },
+      })
+    : [];
+  const completionCounts = new Map(
+    completedByCourse.map((item) => [item.courseId, item._count._all]),
+  );
 
-    const enrollmentTotal = activeEnrollments + completedEnrollments;
-    const completionRate =
-      enrollmentTotal > 0
-        ? `${Math.round((completedEnrollments / enrollmentTotal) * 100)}%`
-        : "0%";
+  const enrollmentTotal = activeEnrollments + completedEnrollments;
+  const completionRate =
+    enrollmentTotal > 0
+      ? `${Math.round((completedEnrollments / enrollmentTotal) * 100)}%`
+      : "0%";
 
-    return {
-      mode: "database" as DashboardMode,
-      stats: [
-        { label: "Active enrollments", value: activeEnrollments.toString() },
-        { label: "Published courses", value: publishedCourses.toString() },
-        { label: "Completion rate", value: completionRate },
-        {
-          label: "Revenue this month",
-          value: formatPrice(revenue._sum.amountCents ?? 0),
-        },
-      ],
-      courses: courses.map((course) => ({
-        id: course.id,
-        title: course.title,
-        instructor: course.instructor,
-        level: course.level,
-        status: course.status,
-        progress: course._count.enrollments > 0 ? 72 : 0,
-      })),
-    };
-  } catch {
-    return emptyOverview();
-  }
+  return {
+    mode: "database" as DashboardMode,
+    stats: [
+      { label: "Active enrollments", value: activeEnrollments.toString() },
+      { label: "Published courses", value: publishedCourses.toString() },
+      { label: "Completion rate", value: completionRate },
+      {
+        label: "Revenue this month",
+        value: formatPrice(revenue._sum.amountCents ?? 0),
+      },
+    ],
+    courses: courses.map((course) => ({
+      id: course.id,
+      title: course.title,
+      instructor: course.instructor,
+      level: course.level,
+      status: course.status,
+      progress:
+        course._count.enrollments > 0
+          ? Math.round(
+              ((completionCounts.get(course.id) ?? 0) /
+                course._count.enrollments) *
+                100,
+            )
+          : 0,
+    })),
+  };
 }
 
 export async function getManageCourses(user: AppUser | null, query?: string) {
@@ -148,37 +182,37 @@ export async function getManageCourses(user: AppUser | null, query?: string) {
     return { mode: "fallback" as DashboardMode, courses: [] };
   }
 
-  if (!hasRole(user?.role, "INSTRUCTOR")) {
+  if (!canAuthorCourses(user)) {
     return { mode: "permission" as DashboardMode, courses: [] };
   }
 
-  try {
-    return {
-      mode: "database" as DashboardMode,
-      courses: await prisma.course.findMany({
-        where: {
-          ...scopeCoursesToUser(user),
-          OR: query
-            ? [
-                { title: { contains: query, mode: "insensitive" } },
-                { subtitle: { contains: query, mode: "insensitive" } },
-              ]
-            : undefined,
-        },
-        orderBy: { updatedAt: "desc" },
-        select: {
-          id: true,
-          title: true,
-          subtitle: true,
-          status: true,
-          priceCents: true,
-          currency: true,
-        },
-      }),
-    };
-  } catch {
-    return { mode: "fallback" as DashboardMode, courses: [] };
-  }
+  return {
+    mode: "database" as DashboardMode,
+    courses: await prisma.course.findMany({
+      where: {
+        AND: [
+          scopeCoursesToUser(user),
+          query
+            ? {
+                OR: [
+                  { title: { contains: query, mode: "insensitive" } },
+                  { subtitle: { contains: query, mode: "insensitive" } },
+                ],
+              }
+            : {},
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        subtitle: true,
+        status: true,
+        priceCents: true,
+        currency: true,
+      },
+    }),
+  };
 }
 
 export async function getEditableCourse(
@@ -218,135 +252,128 @@ export async function getMyCourses(user: AppUser | null) {
     };
   }
 
-  try {
-    const enrollments = await prisma.enrollment.findMany({
-      where: { userId: user.id, status: { in: ["ACTIVE", "COMPLETED"] } },
-      orderBy: { updatedAt: "desc" },
-      include: { course: { include: courseInclude } },
-    });
-    const courseIds = enrollments.map((enrollment) => enrollment.courseId);
-    const lessonIds = enrollments.flatMap((enrollment) =>
-      enrollment.course.sections.flatMap((section) =>
-        section.lessons.map((lesson) => lesson.id),
-      ),
-    );
-    const [progress, requiredAssessments, submissions, certificates] =
-      courseIds.length
-        ? await Promise.all([
-            lessonIds.length
-              ? prisma.lessonProgress.findMany({
-                  where: {
-                    userId: user.id,
-                    lessonId: { in: lessonIds },
-                    completedAt: { not: null },
-                  },
-                  select: { lessonId: true },
-                })
-              : [],
-            prisma.assessment.findMany({
-              where: { courseId: { in: courseIds }, requiredForCompletion: true },
-              select: { id: true, courseId: true, title: true },
-            }),
-            prisma.assessmentSubmission.findMany({
-              where: {
-                userId: user.id,
-                passed: true,
-                assessment: { courseId: { in: courseIds } },
-              },
-              select: { assessmentId: true },
-            }),
-            prisma.certificate.findMany({
-              where: { userId: user.id, courseId: { in: courseIds } },
-              select: { courseId: true, certificateNumber: true },
-            }),
-          ])
-        : [[], [], [], []];
+  const enrollments = await prisma.enrollment.findMany({
+    where: { userId: user.id, status: { in: ["ACTIVE", "COMPLETED"] } },
+    orderBy: { updatedAt: "desc" },
+    include: { course: { include: courseInclude } },
+  });
+  const courseIds = enrollments.map((enrollment) => enrollment.courseId);
+  const lessonIds = enrollments.flatMap((enrollment) =>
+    enrollment.course.sections.flatMap((section) =>
+      section.lessons.map((lesson) => lesson.id),
+    ),
+  );
+  const [progress, requiredAssessments, submissions, certificates] =
+    courseIds.length
+      ? await Promise.all([
+          lessonIds.length
+            ? prisma.lessonProgress.findMany({
+                where: {
+                  userId: user.id,
+                  lessonId: { in: lessonIds },
+                  completedAt: { not: null },
+                  lesson: completedPackageRequirements(user.id),
+                },
+                select: { lessonId: true },
+              })
+            : [],
+          prisma.assessment.findMany({
+            where: {
+              courseId: { in: courseIds },
+              requiredForCompletion: true,
+            },
+            select: { id: true, courseId: true, title: true },
+          }),
+          prisma.assessmentSubmission.findMany({
+            where: {
+              userId: user.id,
+              passed: true,
+              assessment: { courseId: { in: courseIds } },
+            },
+            select: { assessmentId: true },
+          }),
+          prisma.certificate.findMany({
+            where: { userId: user.id, courseId: { in: courseIds } },
+            select: { courseId: true, certificateNumber: true },
+          }),
+        ])
+      : [[], [], [], []];
 
-    const completedLessonIds = new Set(progress.map((item) => item.lessonId));
-    const passedAssessmentIds = new Set(
-      submissions.map((submission) => submission.assessmentId),
-    );
-    const certificateByCourseId = new Map(
-      certificates.map((certificate) => [
-        certificate.courseId,
-        certificate.certificateNumber,
-      ]),
-    );
-    const requiredAssessmentsByCourseId = new Map<
-      string,
-      typeof requiredAssessments
-    >();
-    for (const assessment of requiredAssessments) {
-      const courseAssessments =
-        requiredAssessmentsByCourseId.get(assessment.courseId) ?? [];
-      courseAssessments.push(assessment);
-      requiredAssessmentsByCourseId.set(assessment.courseId, courseAssessments);
-    }
-
-    const courses = enrollments.map((enrollment) => {
-      const lessons = enrollment.course.sections.flatMap(
-        (section) => section.lessons,
-      );
-      const completedLessons = lessons.filter((lesson) =>
-        completedLessonIds.has(lesson.id),
-      );
-      const required = requiredAssessmentsByCourseId.get(enrollment.courseId) ?? [];
-      const completedRequired = required.filter((assessment) =>
-        passedAssessmentIds.has(assessment.id),
-      );
-      const nextLesson =
-        lessons.find((lesson) => !completedLessonIds.has(lesson.id)) ??
-        lessons[0] ??
-        null;
-
-      return {
-        enrollmentStatus: enrollment.status,
-        enrolledAt: enrollment.createdAt,
-        course: enrollment.course,
-        progressPercent: lessons.length
-          ? Math.round((completedLessons.length / lessons.length) * 100)
-          : 0,
-        completedLessons: completedLessons.length,
-        totalLessons: lessons.length,
-        nextLesson,
-        requiredAssessments: required.length,
-        completedRequiredAssessments: completedRequired.length,
-        certificateNumber: certificateByCourseId.get(enrollment.courseId) ?? null,
-      };
-    });
-
-    return {
-      mode: "database" as DashboardMode,
-      courses,
-      summary: {
-        activeCourses: courses.filter(
-          (item) => item.enrollmentStatus === "ACTIVE",
-        ).length,
-        completedCourses: courses.filter(
-          (item) =>
-            item.enrollmentStatus === "COMPLETED" ||
-            item.progressPercent === 100,
-        ).length,
-        requiredWork: courses.reduce(
-          (total, item) =>
-            total +
-            Math.max(
-              0,
-              item.requiredAssessments - item.completedRequiredAssessments,
-            ),
-          0,
-        ),
-        certificatesEarned: courses.filter((item) => item.certificateNumber)
-          .length,
-      },
-    };
-  } catch {
-    return {
-      mode: "fallback" as DashboardMode,
-      courses: [],
-      summary: emptyLearnerSummary(),
-    };
+  const completedLessonIds = new Set(progress.map((item) => item.lessonId));
+  const passedAssessmentIds = new Set(
+    submissions.map((submission) => submission.assessmentId),
+  );
+  const certificateByCourseId = new Map(
+    certificates.map((certificate) => [
+      certificate.courseId,
+      certificate.certificateNumber,
+    ]),
+  );
+  const requiredAssessmentsByCourseId = new Map<
+    string,
+    typeof requiredAssessments
+  >();
+  for (const assessment of requiredAssessments) {
+    const courseAssessments =
+      requiredAssessmentsByCourseId.get(assessment.courseId) ?? [];
+    courseAssessments.push(assessment);
+    requiredAssessmentsByCourseId.set(assessment.courseId, courseAssessments);
   }
+
+  const courses = enrollments.map((enrollment) => {
+    const lessons = enrollment.course.sections.flatMap(
+      (section) => section.lessons,
+    );
+    const completedLessons = lessons.filter((lesson) =>
+      completedLessonIds.has(lesson.id),
+    );
+    const required =
+      requiredAssessmentsByCourseId.get(enrollment.courseId) ?? [];
+    const completedRequired = required.filter((assessment) =>
+      passedAssessmentIds.has(assessment.id),
+    );
+    const nextLesson =
+      lessons.find((lesson) => !completedLessonIds.has(lesson.id)) ?? null;
+
+    return {
+      enrollmentStatus: enrollment.status,
+      complete:
+        lessons.length > 0 &&
+        completedLessons.length === lessons.length &&
+        completedRequired.length === required.length,
+      enrolledAt: enrollment.createdAt,
+      course: enrollment.course,
+      progressPercent: lessons.length
+        ? Math.round((completedLessons.length / lessons.length) * 100)
+        : 0,
+      completedLessons: completedLessons.length,
+      totalLessons: lessons.length,
+      nextLesson,
+      requiredAssessments: required.length,
+      completedRequiredAssessments: completedRequired.length,
+      certificateNumber: certificateByCourseId.get(enrollment.courseId) ?? null,
+    };
+  });
+
+  return {
+    mode: "database" as DashboardMode,
+    courses,
+    summary: {
+      activeCourses: courses.filter((item) => !item.complete).length,
+      completedCourses: courses.filter((item) => item.complete).length,
+      requiredWork: courses.reduce(
+        (total, item) =>
+          total +
+          Math.max(
+            0,
+            item.requiredAssessments - item.completedRequiredAssessments,
+          ),
+        0,
+      ),
+      certificatesEarned: courses.filter((item) => item.certificateNumber)
+        .length,
+    },
+  };
 }
 
 export async function getLearnCourse(
@@ -364,7 +391,9 @@ export async function getLearnCourse(
 
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    include: options.includeLessonContent ? courseContentInclude : courseInclude,
+    include: options.includeLessonContent
+      ? courseContentInclude
+      : courseInclude,
   });
 
   if (!course) {
@@ -382,7 +411,7 @@ export async function getLearnCourse(
       })
     : null;
 
-  if (!canManage && !enrollment) {
+  if (!canManage && !hasLearningAccess(enrollment)) {
     return {
       mode: "permission" as DashboardMode,
       course: null,
@@ -395,7 +424,10 @@ export async function getLearnCourse(
         where: {
           userId: user.id,
           completedAt: { not: null },
-          lesson: { section: { courseId } },
+          lesson: {
+            section: { courseId },
+            ...completedPackageRequirements(user.id),
+          },
         },
         select: { lessonId: true },
       })
@@ -463,6 +495,8 @@ export async function getCourseStudents(
     availableUsers: await getAvailableEnrollmentUsers(
       course.organizationId,
       activeEnrollmentUserIds,
+      courseId,
+      user?.role === "ADMIN",
     ),
     students: course.enrollments.map((enrollment) => {
       const completed = progress.filter(
@@ -489,6 +523,8 @@ export async function getCourseStudents(
 async function getAvailableEnrollmentUsers(
   organizationId: string | null,
   enrolledUserIds: string[],
+  courseId: string,
+  platformAdministrator: boolean,
 ) {
   if (organizationId) {
     const memberships = await prisma.organizationMembership.findMany({
@@ -504,7 +540,10 @@ async function getAvailableEnrollmentUsers(
   }
 
   return prisma.user.findMany({
-    where: { id: { notIn: enrolledUserIds } },
+    where: {
+      id: { notIn: enrolledUserIds },
+      ...(platformAdministrator ? {} : { enrollments: { some: { courseId } } }),
+    },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
@@ -582,8 +621,41 @@ function emptyLearnerSummary() {
   };
 }
 
-function scopeCoursesToUser(user: AppUser | null) {
-  if (!user || user.role === "ADMIN") return {};
-  if (user.role === "INSTRUCTOR") return { instructorId: user.id };
-  return { enrollments: { some: { userId: user.id } } };
+function scopeCoursesToUser(user: AppUser | null): Prisma.CourseWhereInput {
+  if (!user) return { id: { in: [] } };
+  if (user.role === "ADMIN") return {};
+  if (canAuthorCourses(user))
+    return {
+      OR: [
+        {
+          instructorId: user.id,
+          OR: [
+            { organizationId: null },
+            { organizationId: { in: authorableOrganizationIds(user) } },
+          ],
+        },
+        { organizationId: { in: managedOrganizationIds(user) } },
+      ],
+    };
+  return {
+    enrollments: {
+      some: { userId: user.id, status: { in: ["ACTIVE", "COMPLETED"] } },
+    },
+  };
+}
+
+// A new required package can make a historical lesson completion incomplete again.
+// Keep that history, but don't show it as finished until all current packages pass.
+function completedPackageRequirements(userId: string): Prisma.LessonWhereInput {
+  return {
+    externalPackages: {
+      none: {
+        type: "SCORM_12",
+        status: "READY",
+        attempts: {
+          none: { userId, completionStatus: { in: ["passed", "completed"] } },
+        },
+      },
+    },
+  };
 }

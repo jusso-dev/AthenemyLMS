@@ -20,7 +20,11 @@ export default async function InvitationPage({
       });
 
   return (
-    <main className="mx-auto max-w-xl px-4 py-16">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="mx-auto max-w-xl px-4 py-16"
+    >
       {databaseMissing ? (
         <SetupMessage
           title="Supabase setup required"

@@ -14,7 +14,9 @@ Athenemy is a modern self-hostable LMS for creators, teams, and small organisati
 - Organization workspaces with memberships, invitations, roles, onboarding, branded portals, media assets, and public course catalogues.
 - Default course library for editable starter training such as cybersecurity awareness, phishing awareness, password/MFA hygiene, acceptable use, incident response, and data privacy.
 - Developer platform foundations: organization-scoped API keys, scoped `/api/v1` endpoints, consistent JSON errors, pagination, and webhook endpoint management.
-- Automation foundations: learning event log, automation rules, automation runs, notification delivery records, built-in recipe definitions, and Trigger.dev readiness state.
+- Durable automation: transactional learning events, leased PostgreSQL jobs, retries, email recipes, inactivity reminders, signed webhook delivery and scoped replay.
+- Persisted timed assessments, scheduled feedback, and a private sandboxed single-SCO SCORM 1.2 runtime with progress/resume and completion gates.
+- Payment refunds/disputes and paginated catalogues/analytics with net revenue separated by currency.
 - Enterprise, commerce, and social learning foundations: audit logs, privacy settings, custom role capability presets, bundles, coupons, cohorts, discussions, and live sessions.
 
 ## Tech Stack
@@ -61,7 +63,8 @@ Use `.env.example` as the source of truth. The main required groups are:
 - Clerk: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`
 - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - Cloudflare R2: account, access key, secret, bucket, public base URL
-- Trigger.dev, optional: `TRIGGER_SECRET_KEY` or `TRIGGER_API_KEY`
+- Worker signing-secret encryption: `WEBHOOK_ENCRYPTION_KEY`; run `npm run worker` alongside the app.
+- Private persistent SCORM volume: `SCORM_STORAGE_DIR`
 
 See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 
@@ -72,11 +75,20 @@ npm run lint
 npm run typecheck
 npm run test
 npm run test:e2e
+# With a migrated disposable local PostgreSQL database ending in _verify:
+npm run test:integration
+npm run test:workflows
 ```
 
 Playwright starts the local dev server automatically.
 
 ## Deployment Notes
+
+Read the [production readiness review](docs/PRODUCTION_READINESS.md) for the
+implemented safeguards, verification results, remaining limitations and release
+checks. Node 22.16+ is required. `npm start` runs production configuration checks;
+use `npm run dev` for unconfigured local setup mode. Global administrators must be
+explicitly listed in `PLATFORM_ADMIN_CLERK_IDS`.
 
 Deploy to a Node-compatible Next.js host. Configure all production env vars in the hosting dashboard, run Prisma migrations against Supabase, configure Clerk URLs, forward Stripe webhooks to `/api/stripe/webhook`, and configure R2 CORS for browser uploads.
 
@@ -92,6 +104,9 @@ Add screenshots after first deployment:
 
 ## Documentation
 
+- [Production readiness and verification](docs/PRODUCTION_READINESS.md)
+- [Assessments and analytics](docs/ASSESSMENTS_AND_ANALYTICS.md)
+- [SCORM interoperability](docs/INTEROPERABILITY.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Accessibility Audit](docs/ACCESSIBILITY_AUDIT.md)
 - [Automations](docs/AUTOMATIONS.md)

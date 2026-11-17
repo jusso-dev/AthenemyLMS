@@ -44,10 +44,11 @@ const mocks = vi.hoisted(() => {
       upsert: vi.fn(),
     },
     user: {
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
     },
-    $transaction: vi.fn(async (operations: unknown[]) => operations),
+    $transaction: vi.fn(),
   };
 
   return {
@@ -56,9 +57,13 @@ const mocks = vi.hoisted(() => {
     revalidatePath: vi.fn(),
     redirect: vi.fn(),
     sendCoursePublishedEmail: vi.fn(),
+    recordCourseEvent: vi.fn(),
   };
 });
 
+vi.mock("@/lib/learning-events", () => ({
+  recordCourseEvent: mocks.recordCourseEvent,
+}));
 vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
 vi.mock("@/lib/auth", () => ({ requireAppUser: mocks.requireAppUser }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -92,9 +97,15 @@ describe("dashboard course actions", () => {
   beforeEach(() => {
     process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/athenemy";
     vi.clearAllMocks();
+    mocks.prisma.$transaction.mockImplementation(async (operations) =>
+      typeof operations === "function" ? operations(mocks.prisma) : operations,
+    );
     mocks.requireAppUser.mockResolvedValue({
       id: "user_1",
       role: "INSTRUCTOR",
+      organizationMemberships: [
+        { organizationId: "org_1", role: "INSTRUCTOR" },
+      ],
       clerkId: "clerk_1",
       email: "instructor@example.com",
       name: "Instructor",
@@ -636,11 +647,17 @@ describe("dashboard course actions", () => {
       id: "course_1",
       instructorId: "user_1",
     });
-    mocks.prisma.user.findUnique.mockResolvedValue({
+    mocks.prisma.user.findFirst.mockResolvedValue({
       id: "learner_1",
       email: "learner@example.com",
     });
-    mocks.prisma.enrollment.upsert.mockResolvedValue({});
+    mocks.prisma.enrollment.findUnique.mockResolvedValue({
+      status: "CANCELLED",
+    });
+    mocks.prisma.enrollment.upsert.mockResolvedValue({
+      id: "enrollment_1",
+      updatedAt: new Date(0),
+    });
 
     const formData = new FormData();
     formData.set("userId", "learner_1");
@@ -656,11 +673,66 @@ describe("dashboard course actions", () => {
       message: "Learner enrolled.",
     });
 
+    expect(mocks.prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "learner_1",
+        enrollments: { some: { courseId: "course_1" } },
+      },
+    });
+    expect(mocks.recordCourseEvent).toHaveBeenCalledWith(
+      mocks.prisma,
+      expect.objectContaining({ type: "user.enrolled", userId: "learner_1" }),
+    );
     expect(mocks.prisma.enrollment.upsert).toHaveBeenCalledWith({
       where: { userId_courseId: { userId: "learner_1", courseId: "course_1" } },
       create: { userId: "learner_1", courseId: "course_1", status: "ACTIVE" },
       update: { status: "ACTIVE" },
     });
+  });
+
+  it("keeps completed learners completed when manually enrolled again", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      organizationId: "org_1",
+    });
+    mocks.prisma.user.findFirst.mockResolvedValue({ id: "learner_1" });
+    mocks.prisma.enrollment.findUnique.mockResolvedValue({
+      status: "COMPLETED",
+    });
+    const data = new FormData();
+    data.set("userId", "learner_1");
+    await enrollCourseLearnerFormAction(
+      "course_1",
+      { status: "idle", message: null },
+      data,
+    );
+    expect(mocks.prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "learner_1",
+        organizationMemberships: { some: { organizationId: "org_1" } },
+      },
+    });
+    expect(mocks.prisma.enrollment.upsert).not.toHaveBeenCalled();
+    expect(mocks.recordCourseEvent).not.toHaveBeenCalled();
+  });
+  it("rejects learners outside a managed course's organization", async () => {
+    mocks.prisma.course.findUnique.mockResolvedValue({
+      id: "course_1",
+      instructorId: "user_1",
+      organizationId: "org_1",
+    });
+    mocks.prisma.user.findFirst.mockResolvedValue(null);
+    const data = new FormData();
+    data.set("userId", "outsider");
+    expect(
+      await enrollCourseLearnerFormAction(
+        "course_1",
+        { status: "idle", message: null },
+        data,
+      ),
+    ).toMatchObject({ status: "error" });
+    expect(mocks.prisma.enrollment.upsert).not.toHaveBeenCalled();
   });
 
   it("cancels learner access without deleting enrollment history", async () => {

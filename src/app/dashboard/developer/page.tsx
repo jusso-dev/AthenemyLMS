@@ -8,6 +8,7 @@ import {
   createApiKeyFormAction,
   createWebhookEndpointFormAction,
   revokeApiKeyFormAction,
+  replayWebhookDeliveryFormAction,
 } from "@/app/dashboard/developer/actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,13 @@ export default async function DeveloperPage() {
                   orderBy: { createdAt: "desc" },
                   take: 10,
                   include: {
-                    deliveries: { orderBy: { createdAt: "desc" }, take: 3 },
+                    deliveries: {
+                      orderBy: { createdAt: "desc" },
+                      take: 10,
+                      include: {
+                        attemptsLog: { orderBy: { attempt: "desc" }, take: 5 },
+                      },
+                    },
                   },
                 },
               },
@@ -147,7 +154,9 @@ export default async function DeveloperPage() {
                       <p className="font-medium">{key.name}</p>
                       <p className="text-sm text-muted-foreground">
                         {key.keyPrefix}... ·{" "}
-                        {key.scopes.length ? key.scopes.join(", ") : "no scopes"}
+                        {key.scopes.length
+                          ? key.scopes.join(", ")
+                          : "no scopes"}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {key.lastUsedAt
@@ -161,11 +170,7 @@ export default async function DeveloperPage() {
                       </Badge>
                       {!key.revokedAt ? (
                         <ActionForm action={revokeApiKeyFormAction}>
-                          <input
-                            type="hidden"
-                            name="apiKeyId"
-                            value={key.id}
-                          />
+                          <input type="hidden" name="apiKeyId" value={key.id} />
                           <PendingSubmitButton variant="outline" size="sm">
                             Revoke
                           </PendingSubmitButton>
@@ -182,6 +187,12 @@ export default async function DeveloperPage() {
               <CardTitle>Webhook endpoints</CardTitle>
             </CardHeader>
             <CardContent>
+              {!process.env.WEBHOOK_ENCRYPTION_KEY ? (
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Webhook delivery requires a signing encryption key configured
+                  by your operator.
+                </p>
+              ) : null}
               <ActionForm
                 action={createWebhookEndpointFormAction}
                 className="grid gap-4"
@@ -194,7 +205,7 @@ export default async function DeveloperPage() {
                   required
                 />
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {webhookEventTypes.slice(0, 8).map((eventType) => (
+                  {webhookEventTypes.map((eventType) => (
                     <label
                       key={eventType}
                       className="flex items-center gap-2 text-sm"
@@ -230,6 +241,55 @@ export default async function DeveloperPage() {
                     <p className="mt-2 text-xs text-muted-foreground">
                       Recent deliveries: {endpoint.deliveries.length}
                     </p>
+                    {endpoint.deliveries.map((delivery) => (
+                      <details
+                        key={delivery.id}
+                        className="mt-3 rounded border p-2 text-sm"
+                      >
+                        <summary>
+                          {delivery.eventType} · {delivery.status} ·{" "}
+                          {delivery.attempts} attempts
+                        </summary>
+                        <p className="mt-2 break-all">Delivery {delivery.id}</p>
+                        {delivery.responseSummary ? (
+                          <p>{delivery.responseSummary}</p>
+                        ) : null}
+                        {delivery.nextRetryAt ? (
+                          <p>
+                            Next retry: {delivery.nextRetryAt.toISOString()}
+                          </p>
+                        ) : null}
+                        <ul className="mt-2 space-y-1">
+                          {delivery.attemptsLog.map((attempt) => (
+                            <li key={attempt.id}>
+                              Attempt {attempt.attempt}:{" "}
+                              {attempt.statusCode ?? "No response"} ·{" "}
+                              {attempt.durationMs ?? 0} ms {attempt.error}
+                            </li>
+                          ))}
+                        </ul>
+                        {delivery.status === "FAILED" && endpoint.active ? (
+                          <ActionForm
+                            action={replayWebhookDeliveryFormAction}
+                            className="mt-2"
+                          >
+                            <input
+                              type="hidden"
+                              name="organizationId"
+                              value={primary.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="deliveryId"
+                              value={delivery.id}
+                            />
+                            <PendingSubmitButton variant="outline" size="sm">
+                              Replay delivery
+                            </PendingSubmitButton>
+                          </ActionForm>
+                        ) : null}
+                      </details>
+                    ))}
                   </div>
                 ))}
               </div>

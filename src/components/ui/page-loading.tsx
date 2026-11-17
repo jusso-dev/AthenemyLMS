@@ -21,7 +21,11 @@ function HeaderSkeleton() {
 
 export function PublicPageLoading() {
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6"
+    >
       <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-8">
           <HeaderSkeleton />
@@ -87,7 +91,11 @@ export function DashboardPageLoading({
   );
 }
 
-export function DetailPageLoading({ label = "Loading page" }: { label?: string }) {
+export function DetailPageLoading({
+  label = "Loading page",
+}: {
+  label?: string;
+}) {
   return (
     <section className="space-y-6" aria-label={label} aria-busy="true">
       <HeaderSkeleton />

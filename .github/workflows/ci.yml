@@ -8,6 +8,18 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: athenemy_test
+          POSTGRES_DB: athenemy_verify
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U athenemy_test -d athenemy_verify"
+          --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,3 +34,25 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
+      - run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://athenemy_test@localhost:5432/athenemy_verify
+          DIRECT_URL: postgresql://athenemy_test@localhost:5432/athenemy_verify
+      - run: npm run test:integration
+        env:
+          DATABASE_URL: postgresql://athenemy_test@localhost:5432/athenemy_verify
+          DIRECT_URL: postgresql://athenemy_test@localhost:5432/athenemy_verify
+      - run: npm audit --audit-level=high
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:workflows
+        env:
+          DATABASE_URL: postgresql://athenemy_test@localhost:5432/athenemy_verify
+          DIRECT_URL: postgresql://athenemy_test@localhost:5432/athenemy_verify
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7

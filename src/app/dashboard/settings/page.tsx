@@ -155,9 +155,10 @@ export default async function SettingsPage({
                   );
               },
             );
-            const pendingInvitations = membership.organization.invitations.filter(
-              (invitation) => invitation.status === "PENDING",
-            );
+            const pendingInvitations =
+              membership.organization.invitations.filter(
+                (invitation) => invitation.status === "PENDING",
+              );
             const ownerCount = membership.organization.memberships.filter(
               (orgMember) => orgMember.role === "OWNER",
             ).length;
@@ -190,7 +191,10 @@ export default async function SettingsPage({
                       value: membership.organization.memberships.length,
                     },
                     { label: "Owners", value: ownerCount },
-                    { label: "Pending invites", value: pendingInvitations.length },
+                    {
+                      label: "Pending invites",
+                      value: pendingInvitations.length,
+                    },
                   ].map((stat) => (
                     <div
                       key={stat.label}
@@ -255,8 +259,8 @@ export default async function SettingsPage({
                     <div>
                       <p className="text-sm font-medium">Members</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Update identity, app role, organisation role, access
-                        resets, and removals.
+                        Manage organisation roles and membership. Shared account
+                        details remain under each member’s control.
                       </p>
                     </div>
                     <form className="relative w-full lg:max-w-xs">
@@ -304,28 +308,16 @@ export default async function SettingsPage({
                           value={orgMember.id}
                         />
                         <div>
-                          <Input
-                            aria-label={`${orgMember.user.email} display name`}
-                            name="name"
-                            defaultValue={orgMember.user.name ?? ""}
-                            placeholder="Display name"
-                            disabled={!canManage}
-                          />
+                          <p className="font-medium">
+                            {orgMember.user.name || "Member"}
+                          </p>
                           <p className="mt-2 text-xs text-muted-foreground">
                             {orgMember.user.email}
                           </p>
                         </div>
-                        <select
-                          aria-label={`${orgMember.user.email} app role`}
-                          name="appRole"
-                          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                          defaultValue={orgMember.user.role}
-                          disabled={!canManage}
-                        >
-                          <option value="STUDENT">Student</option>
-                          <option value="INSTRUCTOR">Instructor</option>
-                          <option value="ADMIN">Platform admin</option>
-                        </select>
+                        <span className="self-center text-sm text-muted-foreground">
+                          {orgMember.user.role.toLowerCase()}
+                        </span>
                         <select
                           aria-label={`${orgMember.user.email} organisation role`}
                           name="orgRole"
@@ -347,26 +339,28 @@ export default async function SettingsPage({
                         </PendingSubmitButton>
                       </ActionForm>
                       <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-                        <ActionForm action={requirePasswordResetFormAction}>
-                          <input
-                            type="hidden"
-                            name="organizationId"
-                            value={membership.organizationId}
-                          />
-                          <input
-                            type="hidden"
-                            name="membershipId"
-                            value={orgMember.id}
-                          />
-                          <PendingSubmitButton
-                            size="sm"
-                            variant="outline"
-                            disabled={!canManage}
-                            pendingLabel="Requiring..."
-                          >
-                            Require password reset
-                          </PendingSubmitButton>
-                        </ActionForm>
+                        {user?.role === "ADMIN" ? (
+                          <ActionForm action={requirePasswordResetFormAction}>
+                            <input
+                              type="hidden"
+                              name="organizationId"
+                              value={membership.organizationId}
+                            />
+                            <input
+                              type="hidden"
+                              name="membershipId"
+                              value={orgMember.id}
+                            />
+                            <PendingSubmitButton
+                              size="sm"
+                              variant="outline"
+                              disabled={!canManage}
+                              pendingLabel="Requiring..."
+                            >
+                              Require password reset
+                            </PendingSubmitButton>
+                          </ActionForm>
+                        ) : null}
                         <ActionForm action={deleteOrganizationMemberFormAction}>
                           <input
                             type="hidden"
@@ -381,10 +375,12 @@ export default async function SettingsPage({
                           <PendingSubmitButton
                             size="sm"
                             variant="destructive"
-                            disabled={!canManage || orgMember.userId === user?.id}
-                            pendingLabel="Deleting..."
+                            disabled={
+                              !canManage || orgMember.userId === user?.id
+                            }
+                            pendingLabel="Removing..."
                           >
-                            Delete user
+                            Remove member
                           </PendingSubmitButton>
                         </ActionForm>
                       </div>

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import {
   authenticateApiRequest,
   requireApiScope,
@@ -9,7 +9,8 @@ import {
   pageInfo,
   parsePagination,
 } from "@/lib/developer/api-response";
-import { recordLearningEvent } from "@/lib/automations/events";
+import { recordCourseEvent } from "@/lib/learning-events";
+import { learningTransaction } from "@/lib/learning";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -49,53 +50,61 @@ export async function POST(request: Request) {
       await authenticateApiRequest(request),
       "enrollments:write",
     );
-    const body = (await request.json()) as {
-      userId?: string;
-      email?: string;
-      courseId?: string;
-    };
-    if (!body.courseId || (!body.userId && !body.email)) {
+    const parsed = z
+      .object({
+        userId: z.string().min(1).max(200).optional(),
+        email: z.string().email().max(320).optional(),
+        courseId: z.string().min(1).max(200),
+      })
+      .refine((value) => Boolean(value.userId || value.email))
+      .safeParse(await request.json().catch(() => null));
+    if (!parsed.success)
       throw Object.assign(
-        new Error("courseId and either userId or email are required."),
+        new Error("courseId and either a valid userId or email are required."),
         { code: "invalid_request", status: 400 },
       );
-    }
-    const course = await prisma.course.findFirst({
-      where: { id: body.courseId, organizationId: context.organizationId },
-      select: { id: true },
-    });
-    if (!course) {
-      throw Object.assign(new Error("Course not found."), {
-        code: "not_found",
-        status: 404,
+    const body = parsed.data;
+    const enrollment = await learningTransaction(async (tx) => {
+      const course = await tx.course.findFirst({
+        where: { id: body.courseId, organizationId: context.organizationId },
+        select: { id: true },
       });
-    }
-    const user = await prisma.user.findFirst({
-      where: body.userId ? { id: body.userId } : { email: body.email },
-      select: { id: true },
-    });
-    if (!user) {
-      throw Object.assign(new Error("User not found."), {
-        code: "not_found",
-        status: 404,
+      if (!course)
+        throw Object.assign(new Error("Course not found."), {
+          code: "not_found",
+          status: 404,
+        });
+      const user = await tx.user.findFirst({
+        where: {
+          ...(body.userId ? { id: body.userId } : { email: body.email }),
+          organizationMemberships: {
+            some: { organizationId: context.organizationId },
+          },
+        },
+        select: { id: true },
       });
-    }
-
-    const enrollment = await prisma.enrollment.upsert({
-      where: { userId_courseId: { userId: user.id, courseId: course.id } },
-      update: { status: "ACTIVE" },
-      create: { userId: user.id, courseId: course.id, status: "ACTIVE" },
-    });
-
-    await recordLearningEvent({
-      organizationId: context.organizationId,
-      userId: user.id,
-      courseId: course.id,
-      type: "user.enrolled",
-      payload: enrollment as unknown as Prisma.InputJsonObject,
-      idempotencyKey:
-        request.headers.get("idempotency-key") ??
-        `enrollment:${user.id}:${course.id}`,
+      if (!user)
+        throw Object.assign(new Error("Organization member not found."), {
+          code: "not_found",
+          status: 404,
+        });
+      const current = await tx.enrollment.findUnique({
+        where: { userId_courseId: { userId: user.id, courseId: course.id } },
+      });
+      if (current?.status === "ACTIVE" || current?.status === "COMPLETED")
+        return current;
+      const result = await tx.enrollment.upsert({
+        where: { userId_courseId: { userId: user.id, courseId: course.id } },
+        update: { status: "ACTIVE" },
+        create: { userId: user.id, courseId: course.id, status: "ACTIVE" },
+      });
+      await recordCourseEvent(tx, {
+        userId: user.id,
+        courseId: course.id,
+        type: "user.enrolled",
+        idempotencyKey: `api-enrollment:${result.id}:${result.updatedAt.toISOString()}`,
+      });
+      return result;
     });
 
     return apiJson({ data: enrollment }, { status: 201 });

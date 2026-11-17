@@ -4,12 +4,16 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { missingEnv } from "@/lib/env";
 import type { Role } from "@/lib/permissions";
+import { resolvePlatformRole } from "@/lib/permissions";
 
 const appUserInclude = {
   _count: { select: { organizationMemberships: true } },
+  organizationMemberships: { select: { organizationId: true, role: true } },
 } satisfies Prisma.UserInclude;
 
-type PersistedAppUser = Prisma.UserGetPayload<{ include: typeof appUserInclude }>;
+type PersistedAppUser = Prisma.UserGetPayload<{
+  include: typeof appUserInclude;
+}>;
 
 export type AppUser = {
   id: string;
@@ -22,6 +26,7 @@ export type AppUser = {
   bio?: string | null;
   websiteUrl?: string | null;
   organizationMembershipCount?: number;
+  organizationMemberships?: PersistedAppUser["organizationMemberships"];
 };
 
 export function isClerkConfigured() {
@@ -47,7 +52,9 @@ export const getCurrentAppUser = cache(async (): Promise<AppUser | null> => {
   const clerkUser = await currentUser();
   if (!clerkUser?.id) return null;
 
-  const email = clerkUser.emailAddresses[0]?.emailAddress;
+  const email = clerkUser.emailAddresses.find(
+    (address) => address.id === clerkUser.primaryEmailAddressId,
+  )?.emailAddress;
   if (!email) return null;
 
   const user = await prisma.user.upsert({
@@ -85,6 +92,11 @@ function toAppUser(user: PersistedAppUser): AppUser {
   const { _count, ...appUser } = user;
   return {
     ...appUser,
+    role: resolvePlatformRole(
+      appUser.role,
+      appUser.clerkId,
+      process.env.PLATFORM_ADMIN_CLERK_IDS,
+    ),
     organizationMembershipCount: _count.organizationMemberships,
   } as AppUser;
 }

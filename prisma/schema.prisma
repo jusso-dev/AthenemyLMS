@@ -32,6 +32,7 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+  DISPUTED
 }
 
 enum AnalyticsScope {
@@ -212,6 +213,8 @@ model User {
   liveSessions            LiveSession[]            @relation("LiveSessionInstructor")
 
   @@index([role])
+  assessmentAttempts AssessmentAttempt[]
+
 }
 
 model Course {
@@ -349,7 +352,7 @@ model OrganizationAsset {
   tags           String[]              @default([])
   usageNotes     String?
   createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  updatedAt      DateTime              @default(now()) @updatedAt
   organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   uploadedBy     User                  @relation("AssetUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
 
@@ -504,7 +507,7 @@ model ExternalPackage {
   manifest       Json?
   validationLog  String?
   createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
+  updatedAt      DateTime                 @default(now()) @updatedAt
   organization   Organization?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   course         Course                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   lesson         Lesson?                  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
@@ -530,7 +533,7 @@ model ExternalPackageAttempt {
   suspendData      String?
   lastStatement    Json?
   createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  updatedAt        DateTime        @default(now()) @updatedAt
   package          ExternalPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   course           Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -539,6 +542,9 @@ model ExternalPackageAttempt {
   @@unique([packageId, userId])
   @@index([courseId, completionStatus])
   @@index([lessonId, completionStatus])
+  runtimeSessionId String?
+  sessions ExternalPackageSession[]
+
 }
 
 model LessonResource {
@@ -604,6 +610,8 @@ model WebhookEndpoint {
   deliveries     WebhookDelivery[]
 
   @@index([organizationId, active])
+  signingSecretEncrypted String?
+
 }
 
 model WebhookDelivery {
@@ -623,6 +631,12 @@ model WebhookDelivery {
 
   @@index([endpointId, createdAt])
   @@index([status, nextRetryAt])
+  eventKey String?
+  leaseToken String?
+  leaseExpiresAt DateTime?
+  attemptsLog WebhookDeliveryAttempt[]
+  @@unique([endpointId, eventKey])
+
 }
 
 model LearningEvent {
@@ -642,6 +656,9 @@ model LearningEvent {
   @@index([organizationId, type, createdAt])
   @@index([userId, createdAt])
   @@index([courseId, createdAt])
+  dispatchedAt DateTime?
+  @@index([dispatchedAt, createdAt])
+
 }
 
 model AutomationRule {
@@ -680,6 +697,13 @@ model AutomationRun {
 
   @@index([organizationId, status, createdAt])
   @@index([ruleId, createdAt])
+  attempts Int @default(0)
+  nextRetryAt DateTime?
+  leaseToken String?
+  leaseExpiresAt DateTime?
+  @@unique([ruleId, learningEventId])
+  @@index([status, nextRetryAt, leaseExpiresAt])
+
 }
 
 model NotificationDelivery {
@@ -699,6 +723,8 @@ model NotificationDelivery {
   automationRun   AutomationRun?             @relation(fields: [automationRunId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status, createdAt])
+  idempotencyKey String? @unique
+
 }
 
 model AuditLog {
@@ -909,6 +935,8 @@ model Payment {
   courseId        String
   stripeSessionId String?       @unique
   stripePaymentId String?
+  receiptSentAt DateTime?
+  enrollmentEmailSentAt DateTime?
   amountCents     Int
   currency        String        @default("usd")
   status          PaymentStatus @default(PENDING)
@@ -919,6 +947,13 @@ model Payment {
   course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId, status, createdAt])
+  refundedAmountCents Int @default(0)
+  stripeDisputeId String?
+  disputeStatus String?
+  disputeEventCreated Int @default(0)
+  suspendedEnrollmentStatus String?
+  @@index([stripePaymentId])
+
 }
 
 model AnalyticsRollup {
@@ -961,6 +996,9 @@ model Assessment {
 
   @@index([courseId, requiredForCompletion])
   @@index([questionBankId])
+  closesAt DateTime?
+  attempts AssessmentAttempt[]
+
 }
 
 model AssessmentQuestion {
@@ -991,6 +1029,9 @@ model AssessmentSubmission {
 
   @@index([userId, passed])
   @@index([assessmentId, userId])
+  attemptId String? @unique
+  attempt AssessmentAttempt? @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+
 }
 
 model QuestionBank {
@@ -1000,7 +1041,7 @@ model QuestionBank {
   title          String
   description    String?
   createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  updatedAt      DateTime               @default(now()) @updatedAt
   organization   Organization?          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   course         Course?                @relation(fields: [courseId], references: [id], onDelete: Cascade)
   questions      QuestionBankQuestion[]
@@ -1021,7 +1062,7 @@ model QuestionBankQuestion {
   tags           String[]               @default([])
   explanation    String?
   createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  updatedAt      DateTime               @default(now()) @updatedAt
   questionBank   QuestionBank           @relation(fields: [questionBankId], references: [id], onDelete: Cascade)
 
   @@index([questionBankId, type])
@@ -1051,4 +1092,43 @@ model Certificate {
 
   @@unique([userId, courseId])
   @@index([courseId, issuedAt])
+}
+
+model AssessmentAttempt {
+  id String @id @default(cuid())
+  assessmentId String
+  userId String
+  attemptNumber Int
+  startedAt DateTime @default(now())
+  deadlineAt DateTime?
+  submittedAt DateTime?
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submission AssessmentSubmission?
+  @@unique([assessmentId, userId, attemptNumber])
+  @@index([assessmentId, userId, submittedAt])
+}
+
+model WebhookDeliveryAttempt {
+ id String @id @default(cuid())
+ deliveryId String
+ attempt Int
+ statusCode Int?
+ error String?
+ durationMs Int?
+ createdAt DateTime @default(now())
+ delivery WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+ @@unique([deliveryId, attempt])
+}
+model ExternalPackageSession {
+ id String @id @default(cuid())
+ attemptId String
+ tokenHash String @unique
+ expiresAt DateTime
+ sequence Int @default(0)
+ sessionTimeSeconds Int @default(0)
+ createdAt DateTime @default(now())
+ attempt ExternalPackageAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+ @@index([attemptId])
+ @@index([expiresAt])
 }

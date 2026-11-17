@@ -33,7 +33,7 @@ export default async function PortalHomePage({
       theme={publishedTheme(organization.portal)}
       signedIn={Boolean(user)}
     >
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <PortalBlocks
           blocks={page.blocks}
           courses={courses}

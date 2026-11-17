@@ -21,21 +21,40 @@ export default async function LearnCoursePage({
 }) {
   const { courseId } = await params;
   const user = await getCurrentAppUser();
-  const { mode, course, completedLessonIds } = await getLearnCourse(user, courseId);
+  const { mode, course, completedLessonIds } = await getLearnCourse(
+    user,
+    courseId,
+  );
   const completedIds: string[] = completedLessonIds;
   const lessons = course?.sections.flatMap((section) => section.lessons) ?? [];
-  const firstIncompleteLesson =
-    lessons.find((lesson) => !completedIds.includes(lesson.id)) ?? lessons[0];
+  const firstIncompleteLesson = lessons.find(
+    (lesson) => !completedIds.includes(lesson.id),
+  );
   const progressPercent = lessons.length
     ? Math.round((completedIds.length / lessons.length) * 100)
     : 0;
   const assessments =
-    mode !== "permission" && databaseIsConfigured()
+    course && mode === "database" && databaseIsConfigured()
       ? await prisma.assessment.findMany({
           where: { courseId },
           orderBy: { createdAt: "desc" },
+          include: {
+            submissions: {
+              where: { userId: user?.id ?? "__anonymous__", passed: true },
+              select: { id: true },
+              take: 1,
+            },
+          },
         })
       : [];
+  const missingAssessments = assessments.filter(
+    (assessment) =>
+      assessment.requiredForCompletion && assessment.submissions.length === 0,
+  );
+  const complete =
+    lessons.length > 0 &&
+    completedIds.length === lessons.length &&
+    missingAssessments.length === 0;
 
   return (
     <div className="space-y-6">
@@ -59,10 +78,19 @@ export default async function LearnCoursePage({
         <Card>
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium">Course progress</p>
+              <p className="text-sm font-medium">
+                {complete ? "Course complete" : "Course progress"}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {completedIds.length} of {lessons.length} lessons complete
               </p>
+              {missingAssessments.length > 0 ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {missingAssessments.length} required assessment
+                  {missingAssessments.length === 1 ? "" : "s"} remaining before
+                  course completion.
+                </p>
+              ) : null}
             </div>
             <div className="w-full sm:max-w-sm">
               <Progress value={progressPercent} />
@@ -120,12 +148,14 @@ export default async function LearnCoursePage({
           ))}
         </CardContent>
       </Card>
-      <Button asChild variant="outline">
-        <Link href={`/dashboard/learn/${courseId}/certificate`}>
-          <Award className="h-4 w-4" />
-          Course certificate
-        </Link>
-      </Button>
+      {course?.certificatesEnabled ? (
+        <Button asChild variant="outline">
+          <Link href={`/dashboard/learn/${courseId}/certificate`}>
+            <Award className="h-4 w-4" />
+            Course certificate
+          </Link>
+        </Button>
+      ) : null}
       {assessments.length > 0 ? (
         <Card>
           <CardHeader>
@@ -140,7 +170,13 @@ export default async function LearnCoursePage({
               >
                 <ClipboardCheck className="h-4 w-4 text-primary" />
                 {assessment.title}
-                {assessment.requiredForCompletion ? (
+                {assessment.submissions.length > 0 ? (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Passed
+                  </span>
+                ) : null}
+                {assessment.requiredForCompletion &&
+                assessment.submissions.length === 0 ? (
                   <span className="ml-auto text-xs text-muted-foreground">
                     Required
                   </span>

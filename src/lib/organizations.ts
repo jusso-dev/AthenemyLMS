@@ -41,25 +41,19 @@ export async function createOrganizationForUser(input: {
   const baseSlug = slugify(input.name);
   const slug = `${baseSlug}-${createInvitationToken().slice(0, 6)}`;
 
-  const [, organization] = await prisma.$transaction([
-    prisma.user.update({
-      where: { id: input.userId },
-      data: { role: "ADMIN" },
-    }),
-    prisma.organization.create({
-      data: {
-        name: input.name,
-        slug,
-        supportEmail: input.supportEmail || null,
-        memberships: {
-          create: { userId: input.userId, role: "OWNER" },
-        },
-        portal: {
-          create: {},
-        },
+  const organization = await prisma.organization.create({
+    data: {
+      name: input.name,
+      slug,
+      supportEmail: input.supportEmail || null,
+      memberships: {
+        create: { userId: input.userId, role: "OWNER" },
       },
-    }),
-  ]);
+      portal: {
+        create: {},
+      },
+    },
+  });
 
   for (const templateId of input.starterTemplateIds ?? []) {
     await instantiateDefaultCourseTemplate({
@@ -102,7 +96,8 @@ export async function acceptInvitation(input: {
           userId: input.userId,
         },
       },
-      update: { role: invitation.role },
+      // An invitation must not downgrade an existing owner or replace a role grant.
+      update: {},
       create: {
         organizationId: invitation.organizationId,
         userId: input.userId,

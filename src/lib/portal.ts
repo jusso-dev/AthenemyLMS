@@ -1,3 +1,4 @@
+import { getCourseCatalogue } from "@/lib/course-data";
 import {
   Prisma,
   type PortalBlockType,
@@ -247,7 +248,15 @@ export async function getPortalCourses(organizationId: string, limit?: number) {
   return prisma.course.findMany({
     where: portalPublishedCourseWhere(organizationId),
     orderBy: { updatedAt: "desc" },
-    take: limit,
+    take: Math.min(
+      100,
+      Math.max(
+        1,
+        typeof limit === "number" && Number.isFinite(limit)
+          ? Math.floor(limit)
+          : 24,
+      ),
+    ),
     select: {
       id: true,
       title: true,
@@ -265,6 +274,18 @@ export async function getPortalCourses(organizationId: string, limit?: number) {
       _count: { select: { sections: true } },
     },
   });
+}
+
+export async function getPortalCourseCatalogue(
+  organizationId: string,
+  query?: string,
+  page?: string | number,
+) {
+  return getCourseCatalogue(
+    portalPublishedCourseWhere(organizationId),
+    query,
+    page,
+  );
 }
 
 export function portalPublishedCourseWhere(organizationId: string) {
