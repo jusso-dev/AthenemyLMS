@@ -68,7 +68,8 @@
   "overrides": {
     "@prisma/config": {
       "deepmerge-ts": "^8.0.0"
-    }
+    },
+    "effect": "3.22.5"
   },
   "engines": {
     "node": ">=22.16.0"
